@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "middleware/wireless/bluetooth/application/common/ble_port_fsci/core1",
+		"source" : "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk/mcuxsdk/middleware/wireless/bluetooth/application/common/ble_port_fsci/core1"
+	}
+}

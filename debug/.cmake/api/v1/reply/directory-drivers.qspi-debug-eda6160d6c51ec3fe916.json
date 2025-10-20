@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "drivers/qspi",
+		"source" : "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk/mcuxsdk/drivers/qspi"
+	}
+}

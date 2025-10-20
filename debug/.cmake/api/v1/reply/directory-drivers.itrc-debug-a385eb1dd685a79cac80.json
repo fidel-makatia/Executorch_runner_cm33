@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "drivers/itrc",
+		"source" : "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk/mcuxsdk/drivers/itrc"
+	}
+}

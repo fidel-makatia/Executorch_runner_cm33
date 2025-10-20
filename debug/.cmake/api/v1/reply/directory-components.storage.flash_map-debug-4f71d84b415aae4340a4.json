@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "components/storage/flash_map",
+		"source" : "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk/mcuxsdk/components/storage/flash_map"
+	}
+}

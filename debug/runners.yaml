@@ -1,0 +1,43 @@
+# Available runners configured by board.cmake.
+runners:
+- linkserver
+- pyocd
+- jlink
+- openocd
+- canopen
+
+# Default flash runner if --runner is not given.
+flash-runner: linkserver
+
+# Default debug runner if --runner is not given.
+debug-runner: linkserver
+
+# Common runner configuration values.
+config:
+  board_dir: /Users/fidelmakatia/MCUXpressoSDK/mcuxsdk/mcuxsdk/examples/_boards/mcimx93evk
+  # Build outputs:
+  bin_file: executorch_runner_cm33.bin
+  elf_file: executorch_runner_cm33.elf
+  hex_file: executorch_runner_cm33.hex
+  # Host tools:
+  gdb: /Users/fidelmakatia/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-gdb
+
+# Runner specific arguments
+args:
+  linkserver:
+    - --dt-flash=y
+    - --device=MIMX9352:MCIMX93-EVK
+  pyocd:
+    - --dt-flash=y
+    - --target=mimx9352
+  jlink:
+    - --dt-flash=y
+    - --device=MIMX9352
+  openocd:
+    - --cmd-load
+    - flash write_image erase
+    - --cmd-verify
+    - verify_image
+  canopen:
+    []
+
