@@ -1,8 +1,3 @@
-Here’s your content properly formatted as a **GitHub Markdown file (`README.md`)** — clean, readable, and preserving all code blocks, structure, and hierarchy.
-
----
-
-```markdown
 # Running ExecuTorch on i.MX93 Cortex-M33 – Developer Guide
 
 ✅ **Successfully Deployed ExecuTorch Runtime on NXP i.MX93 EVK**
@@ -249,10 +244,3 @@ reserved-memory {
 **Status:** ✅ Successfully deployed and running on target hardware
 
 **Author:** *Fidel Makatia*
-
-```
-
----
-
-Would you like me to include GitHub badges and frontmatter (e.g., tags, license, author, etc.) at the top to make it look more like a polished open-source project README?
-```
