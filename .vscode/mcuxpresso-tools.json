@@ -1,14 +1,14 @@
 {
   "version": "25.3",
-  "toolchainPath": "/Users/fidelmakatia/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
+  "toolchainPath": "${config:mcuxpresso.toolchain.path}",
   "linkedProjects": [],
   "trustZoneType": "none",
   "multicoreType": "none",
   "projectType": "sdk-v2-repository",
-  "projectName": "mcimx93evk_hello_world",
+  "projectName": "executorch_runner_cm33",
   "sdk": {
     "version": "25.9.0",
-    "path": "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk",
+    "path": "${config:mcuxpresso.sdk.path}",
     "boardId": "mcimx93evk",
     "deviceId": "MIMX9352xxxxM",
     "coreId": "cm33"

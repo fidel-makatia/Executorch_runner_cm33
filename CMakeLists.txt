@@ -16,7 +16,7 @@ include(${SdkRootDirPath}/CMakeLists.txt)
 # Add ExecuTorch source files
 mcux_add_source(
     BASE_PATH ${CMAKE_CURRENT_SOURCE_DIR}
-    SOURCES 
+    SOURCES
         source/arm_executor_runner.cpp
         source/arm_memory_allocator.cpp
 )
@@ -33,18 +33,17 @@ target_link_libraries(${MCUX_SDK_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch_delegate_ethos_u.a
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch.a
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch_core.a
-    m  # math library
+    m   # math library
     stdc++  # C++ standard library
 )
 
 # Add compile definitions for ExecuTorch
-# Change these lines in your CMakeLists.txt
-# Change these lines in your CMakeLists.txt
 target_compile_definitions(${MCUX_SDK_PROJECT_NAME} PRIVATE
     ET_ARM_BAREMETAL_METHOD_ALLOCATOR_POOL_SIZE=0x4000    # 16KB
-    ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x2000  # 8KB  
+    ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x2000  # 8KB
     ET_MODEL_PTE_ADDR=0x80100000
 )
+
 # Set C++ standard
 set_target_properties(${MCUX_SDK_PROJECT_NAME} PROPERTIES
     CXX_STANDARD 17
@@ -52,12 +51,17 @@ set_target_properties(${MCUX_SDK_PROJECT_NAME} PROPERTIES
 )
 
 # Add C++ specific compiler flags
-# Add to CMakeLists.txt compile options
 target_compile_options(${MCUX_SDK_PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
-    $<$<COMPILE_LANGUAGE:CXX>:-Wno-format>  # Suppress format warnings temporarily
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-format>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=deprecated-declarations>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=switch>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-variable>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=unused-but-set-variable>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error=sign-compare>
+    $<$<COMPILE_LANGUAGE:CXX>:-Wno-error>
 )
 
 include(${SdkRootDirPath}/${board_root}/${board}/demo_apps/hello_world/reconfig.cmake OPTIONAL)

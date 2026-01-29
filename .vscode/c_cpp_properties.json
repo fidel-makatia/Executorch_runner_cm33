@@ -2,7 +2,7 @@
   "version": 4,
   "configurations": [
     {
-      "name": "IntelliSense Configuration",
+      "name": "Windows",
       "compileCommands": [
         "${workspaceFolder}/debug/compile_commands.json"
       ],
@@ -21,7 +21,65 @@
       "cStandard": "gnu99",
       "cppStandard": "c++17",
       "intelliSenseMode": "gcc-arm",
-      "compilerPath": "${config:mcuxpresso.toolchain.path}/bin/arm-none-eabi-gcc",
+      "compilerPath": "${userHome}/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "${workspaceFolder}/executorch/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    },
+    {
+      "name": "Linux",
+      "compileCommands": [
+        "${workspaceFolder}/debug/compile_commands.json"
+      ],
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/executorch/include",
+        "${workspaceFolder}/executorch/include/executorch",
+        "${workspaceFolder}/source"
+      ],
+      "defines": [
+        "CPU_MIMX9352DVMXM_cm33",
+        "ET_ARM_BAREMETAL_METHOD_ALLOCATOR_POOL_SIZE=0x2000000",
+        "ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x800000",
+        "ET_MODEL_PTE_ADDR=0x80100000"
+      ],
+      "cStandard": "gnu99",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm",
+      "compilerPath": "${userHome}/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc",
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "${workspaceFolder}/executorch/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    },
+    {
+      "name": "macOS",
+      "compileCommands": [
+        "${workspaceFolder}/debug/compile_commands.json"
+      ],
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/executorch/include",
+        "${workspaceFolder}/executorch/include/executorch",
+        "${workspaceFolder}/source"
+      ],
+      "defines": [
+        "CPU_MIMX9352DVMXM_cm33",
+        "ET_ARM_BAREMETAL_METHOD_ALLOCATOR_POOL_SIZE=0x2000000",
+        "ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x800000",
+        "ET_MODEL_PTE_ADDR=0x80100000"
+      ],
+      "cStandard": "gnu99",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-arm",
+      "compilerPath": "${userHome}/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi/bin/arm-none-eabi-gcc",
       "browse": {
         "path": [
           "${workspaceFolder}",

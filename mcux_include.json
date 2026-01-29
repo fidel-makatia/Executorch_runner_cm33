@@ -5,16 +5,121 @@
   },
   "configurePresets": [
     {
+      "name": "debug-env-windows",
+      "displayName": "debug-env-windows",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "environment": {
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/Scripts",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
+      "name": "debug-env-linux",
+      "displayName": "debug-env-linux",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "environment": {
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
+      "name": "debug-env-macos",
+      "displayName": "debug-env-macos",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "environment": {
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
       "name": "debug-env",
       "displayName": "debug-env",
       "hidden": true,
+      "inherits": ["debug-env-windows", "debug-env-linux", "debug-env-macos"]
+    },
+    {
+      "name": "release-env-windows",
+      "displayName": "release-env-windows",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "environment": {
-        "ARMGCC_DIR": "/Users/fidelmakatia/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
-        "SdkRootDirPath": "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk",
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "/Users/fidelmakatia/.mcuxpressotools/.venv/bin",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/Scripts",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
-        "POSTPROCESS_UTILITY": "/Users/fidelmakatia/.mcuxpressotools/mcux-fixelf-14.2.2/mcux-fixelf",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
+      "name": "release-env-linux",
+      "displayName": "release-env-linux",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "environment": {
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
+      "name": "release-env-macos",
+      "displayName": "release-env-macos",
+      "hidden": true,
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "environment": {
+        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
+        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
       "cacheVariables": {}
@@ -23,16 +128,7 @@
       "name": "release-env",
       "displayName": "release-env",
       "hidden": true,
-      "environment": {
-        "ARMGCC_DIR": "/Users/fidelmakatia/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
-        "SdkRootDirPath": "/Users/fidelmakatia/MCUXpressoSDK/mcuxsdk",
-        "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "/Users/fidelmakatia/.mcuxpressotools/.venv/bin",
-        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
-        "POSTPROCESS_UTILITY": "/Users/fidelmakatia/.mcuxpressotools/mcux-fixelf-14.2.2/mcux-fixelf",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-      },
-      "cacheVariables": {}
+      "inherits": ["release-env-windows", "release-env-linux", "release-env-macos"]
     }
   ],
   "buildPresets": []
