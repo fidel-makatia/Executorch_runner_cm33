@@ -111,6 +111,25 @@ git clone https://github.com/fidel-makatia/Executorch_runner_cm33.git
 cd Executorch_runner_cm33
 ```
 
+### Configure User-Specific Paths
+
+After cloning, you **must** update the paths in `mcux_include.json` to match your system. This file contains hardcoded paths that need to be changed in two places: the `debug-env` preset and the `release-env` preset.
+
+**Paths to update in `mcux_include.json`:**
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ARMGCC_DIR` | Path to ARM GCC toolchain | `/Users/yourname/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi` |
+| `SdkRootDirPath` | Path to MCUXpresso SDK root | `/Users/yourname/MCUXpressoSDK/mcutest` |
+| `POSTPROCESS_UTILITY` | Path to mcux-fixelf utility | `/Users/yourname/.mcuxpressotools/mcux-fixelf-14.2.2/mcux-fixelf` |
+| `MCUX_VENV_PATH` | Path to Python virtual environment bin folder | `/Users/yourname/.mcuxpressotools/.venv/bin` |
+
+**Location in `mcux_include.json`:**
+- **`debug-env`** preset (around lines 65-80)
+- **`release-env`** preset (around lines 145-155)
+
+> **Important**: Make sure to update **both** the `debug-env` and `release-env` sections with your paths.
+
 ---
 
 ## Step 3: Open in VS Code
