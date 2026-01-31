@@ -1,14 +1,14 @@
 {
   "version": "25.3",
-  "toolchainPath": "${config:mcuxpresso.toolchain.path}",
+  "toolchainPath": "C:/Users/Fidel/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
   "linkedProjects": [],
   "trustZoneType": "none",
   "multicoreType": "none",
   "projectType": "sdk-v2-repository",
   "projectName": "executorch_runner_cm33",
   "sdk": {
-    "version": "25.9.0",
-    "path": "${config:mcuxpresso.sdk.path}",
+    "path": "c:\\Users\\Fidel\\mcuxsdk",
+    "version": "26.3.0",
     "boardId": "mcimx93evk",
     "deviceId": "MIMX9352xxxxM",
     "coreId": "cm33"

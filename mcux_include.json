@@ -65,7 +65,19 @@
       "name": "debug-env",
       "displayName": "debug-env",
       "hidden": true,
-      "inherits": ["debug-env-windows", "debug-env-linux", "debug-env-macos"]
+      "inherits": [
+        "debug-env-windows",
+        "debug-env-linux",
+        "debug-env-macos"
+      ],
+      "environment": {
+        "ARMGCC_DIR": "C:/Users/Fidel/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "c:/Users/Fidel/mcuxsdk",
+        "POSTPROCESS_UTILITY": "C:/Users/Fidel/.mcuxpressotools/mcux-fixelf-14.2.2/mcux-fixelf.exe",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MCUX_VENV_PATH": "C:/Users/Fidel/.mcuxpressotools/.venv_3_11/Scripts",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}"
+      }
     },
     {
       "name": "release-env-windows",
@@ -128,7 +140,17 @@
       "name": "release-env",
       "displayName": "release-env",
       "hidden": true,
-      "inherits": ["release-env-windows", "release-env-linux", "release-env-macos"]
+      "inherits": [
+        "release-env-windows",
+        "release-env-linux",
+        "release-env-macos"
+      ],
+      "environment": {
+        "ARMGCC_DIR": "C:/Users/Fidel/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
+        "SdkRootDirPath": "c:/Users/Fidel/mcuxsdk",
+        "POSTPROCESS_UTILITY": "C:/Users/Fidel/.mcuxpressotools/mcux-fixelf-14.2.2/mcux-fixelf.exe",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
     }
   ],
   "buildPresets": []
