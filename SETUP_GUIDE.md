@@ -1,19 +1,18 @@
-﻿# ExecuTorch Runner CM33 - MCUXpresso Setup Guide
+# ExecuTorch Runner CM33 - MCUXpresso Setup Guide
 
-This guide documents how to import and configure the ExecuTorch Runner project for the i.MX93 Cortex-M33 in VS Code with MCUXpresso extension.
+This guide documents how to set up, build, and deploy the ExecuTorch Runner project for the i.MX93 Cortex-M33 using VS Code with the MCUXpresso extension.
 
-> **Cross-Platform Support**: This project is configured to work on Windows, Linux, and macOS with automatic OS detection.
+> **Cross-Platform Support**: This project works on Windows, Linux, and macOS. Paths are resolved through environment variables, so you can clone the project anywhere on your filesystem.
 
 ---
 
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Step 1: Clone the Repository](#step-1-clone-the-repository)
-- [Step 2: Initial Setup](#step-2-initial-setup)
+- [Step 1: Set Environment Variables](#step-1-set-environment-variables)
+- [Step 2: Clone the Repository](#step-2-clone-the-repository)
 - [Step 3: Open in VS Code](#step-3-open-in-vs-code)
 - [Step 4: Configure and Build](#step-4-configure-and-build)
-- [Cross-Platform Configuration Details](#cross-platform-configuration-details)
 - [Command Line Build](#command-line-build)
 - [Deployment to i.MX93](#deployment-to-imx93)
 - [Troubleshooting](#troubleshooting)
@@ -22,70 +21,102 @@ This guide documents how to import and configure the ExecuTorch Runner project f
 
 ## Prerequisites
 
-- **VS Code** with MCUXpresso extension installed
-- **MCUXpresso SDK** for i.MX93 EVK (installed in `~/mcimx93_evk`)
-- **ARM GCC Toolchain** 14.2.rel1 (installed via MCUXpresso tools)
-- **Git** installed
+- **VS Code** with the [MCUXpresso for VS Code](https://marketplace.visualstudio.com/items?itemName=nxpsemiconductors.mcuxpresso) extension installed
+- **MCUXpresso SDK 25.9.0** for i.MX93 EVK (install via the MCUXpresso extension)
+- **ARM GCC Toolchain 14.2.rel1** (install via the MCUXpresso extension)
+- **Git**
 - **CMake** 3.22.0 or later
 - **Ninja** build system
 
 ---
 
-## Step 1: Clone the Repository
+## Step 1: Set Environment Variables
 
-### Windows (PowerShell)
+The build system reads three environment variables to locate your toolchain and SDK. Set these **once** for your user account so every project picks them up automatically.
+
+### Required Variables
+
+| Variable | Description | Example Value |
+|----------|-------------|---------------|
+| `ARMGCC_DIR` | Path to the ARM GCC toolchain root | See platform table below |
+| `SdkRootDirPath` | Path to the MCUXpresso SDK root (the `mcimx93_evk` folder) | See platform table below |
+| `MCUX_VENV_PATH` | Path to the MCUXpresso Python venv executables | See platform table below |
+
+### Toolchain Directory Names by Platform
+
+| Platform | Toolchain Directory Name |
+|----------|-------------------------|
+| Windows | `arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi` |
+| Linux (x86_64) | `arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi` |
+| macOS (Apple Silicon) | `arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi` |
+| macOS (Intel) | `arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi` |
+
+### Windows (PowerShell - persistent for current user)
 
 ```powershell
-cd $HOME
-git clone https://github.com/fidel-makatia/Executorch_runner_cm33
+# Set ARMGCC_DIR (adjust the path if you installed the toolchain elsewhere)
+[Environment]::SetEnvironmentVariable("ARMGCC_DIR", "$env:USERPROFILE\.mcuxpressotools\arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi", "User")
+
+# Set SdkRootDirPath (adjust the path to your SDK location)
+[Environment]::SetEnvironmentVariable("SdkRootDirPath", "$env:USERPROFILE\mcimx93_evk", "User")
+
+# Set MCUX_VENV_PATH (adjust if your venv has a different name, e.g. .venv_3_11)
+[Environment]::SetEnvironmentVariable("MCUX_VENV_PATH", "$env:USERPROFILE\.mcuxpressotools\.venv\Scripts", "User")
 ```
 
-### Linux (Bash)
+> **Note**: Restart VS Code (or your terminal) after setting environment variables so they take effect.
+
+### Linux (Bash - add to `~/.bashrc` or `~/.profile`)
 
 ```bash
-cd ~
-git clone https://github.com/fidel-makatia/Executorch_runner_cm33
+# Add these lines to ~/.bashrc (or ~/.profile)
+export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi"
+export SdkRootDirPath="$HOME/mcimx93_evk"
+export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
 ```
 
-### macOS (Bash/Zsh)
+Then reload:
 
 ```bash
-cd ~
-git clone https://github.com/fidel-makatia/Executorch_runner_cm33
+source ~/.bashrc
+```
+
+### macOS (Zsh - add to `~/.zshrc`)
+
+```bash
+# Add these lines to ~/.zshrc
+# For Apple Silicon:
+export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi"
+# For Intel Mac:
+# export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi"
+
+export SdkRootDirPath="$HOME/mcimx93_evk"
+export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
+```
+
+Then reload:
+
+```bash
+source ~/.zshrc
 ```
 
 ---
 
-## Step 2: Initial Setup
+## Step 2: Clone the Repository
 
-### Create the `prj.conf` file (Required)
+Clone the project **anywhere** on your filesystem:
 
-The MCUXpresso build system requires a `prj.conf` file in the project root:
-
-**Windows (PowerShell):**
-```powershell
-cd Executorch_runner_cm33
-New-Item -Path "prj.conf" -ItemType File -Force
-```
-
-**Linux/macOS (Bash):**
 ```bash
+git clone https://github.com/fidel-makatia/Executorch_runner_cm33.git
 cd Executorch_runner_cm33
-touch prj.conf
 ```
 
 ---
 
 ## Step 3: Open in VS Code
 
-### Windows
-```powershell
-code "$HOME\Executorch_runner_cm33"
-```
-
-### Linux/macOS
 ```bash
-code ~/Executorch_runner_cm33
+code Executorch_runner_cm33
 ```
 
 ---
@@ -118,106 +149,18 @@ code ~/Executorch_runner_cm33
 
 ---
 
-## Cross-Platform Configuration Details
-
-The project uses CMake preset conditions to automatically detect your operating system and apply the correct paths.
-
-### Expected Directory Structure
-
-```
-~/                                    # User home directory
- .mcuxpressotools/                # MCUXpresso tools
-    arm-gnu-toolchain-14.2.rel1-<platform>-arm-none-eabi/
-    .venv/                       # Python virtual environment
- mcimx93_evk/                     # SDK root
-    mcuxsdk/                     # MCUXpresso SDK
- Executorch_runner_cm33/          # This project
-```
-
-### Toolchain Names by Platform
-
-| Platform | Toolchain Directory Name |
-|----------|-------------------------|
-| Windows | `arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi` |
-| Linux | `arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi` |
-| macOS (Apple Silicon) | `arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi` |
-| macOS (Intel) | `arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi` |
-
-### Python venv Path by Platform
-
-| Platform | venv Executables Path |
-|----------|----------------------|
-| Windows | `.venv/Scripts` |
-| Linux/macOS | `.venv/bin` |
-
----
-
 ## Command Line Build
 
-### Windows (PowerShell)
-
-```powershell
-cd $HOME\Executorch_runner_cm33
-
-# Set environment variables
-$env:ARMGCC_DIR = "$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi"
-$env:SdkRootDirPath = "$HOME/mcimx93_evk"
-$env:BOARD = "mcimx93evk"
-
-# Clean (optional)
-Remove-Item -Recurse -Force debug -ErrorAction SilentlyContinue
-
-# Configure
-cmake --preset debug
-
-# Build
-cmake --build debug
-# Or: cd debug; ninja
-```
-
-### Linux (Bash)
+After setting the environment variables (Step 1), you can build from any terminal:
 
 ```bash
-cd ~/Executorch_runner_cm33
-
-# Set environment variables
-export ARMGCC_DIR=~/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi
-export SdkRootDirPath=~/mcimx93_evk
-export BOARD=mcimx93evk
-
-# Clean (optional)
-rm -rf debug
+cd Executorch_runner_cm33
 
 # Configure
 cmake --preset debug
 
 # Build
 cmake --build debug
-# Or: cd debug && ninja
-```
-
-### macOS (Bash/Zsh)
-
-```bash
-cd ~/Executorch_runner_cm33
-
-# Set environment variables (Apple Silicon)
-export ARMGCC_DIR=~/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi
-# For Intel Mac, use:
-# export ARMGCC_DIR=~/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi
-
-export SdkRootDirPath=~/mcimx93_evk
-export BOARD=mcimx93evk
-
-# Clean (optional)
-rm -rf debug
-
-# Configure
-cmake --preset debug
-
-# Build
-cmake --build debug
-# Or: cd debug && ninja
 ```
 
 ---
@@ -245,6 +188,7 @@ dmesg | grep remoteproc
 ```
 
 Expected output:
+
 ```
 remoteproc remoteproc0: powering up imx-rproc
 remoteproc remoteproc0: Booting fw image executorch_runner_cm33.elf
@@ -259,37 +203,29 @@ remoteproc remoteproc0: remote processor imx-rproc is now up
 
 | Issue | Solution |
 |-------|----------|
-| CMake configuration fails | Verify SDK and toolchain paths exist |
-| Toolchain not found | Check `ARMGCC_DIR` matches your installed toolchain |
-| SDK not found | Verify `SdkRootDirPath` points to the SDK location |
-| `prj.conf` missing | Create an empty `prj.conf` in project root |
-| IntelliSense uses wrong compiler | Select correct configuration in VS Code (Windows/Linux/macOS) |
+| `ARMGCC_DIR` not found | Verify the environment variable is set: `echo $ARMGCC_DIR` (Linux/macOS) or `echo %ARMGCC_DIR%` (Windows) |
+| `SdkRootDirPath` not found | Verify the environment variable is set and points to your SDK root |
+| CMake configuration fails | Restart VS Code after setting environment variables |
+| Toolchain not found | Confirm the ARM GCC toolchain directory exists at the path in `ARMGCC_DIR` |
+| SDK not found | Confirm `SdkRootDirPath` points to the folder containing the `mcuxsdk` subdirectory |
+| IntelliSense uses wrong compiler | Select the correct configuration (Windows/Linux/macOS) in the C/C++ extension status bar |
 | Permission denied (Linux/macOS) | Run `chmod +x` on toolchain binaries |
+| Python/west not found | Verify `MCUX_VENV_PATH` points to your venv's `Scripts` (Windows) or `bin` (Linux/macOS) directory |
 
 ### Verify Your Setup
 
 **Windows (PowerShell):**
+
 ```powershell
-# Check toolchain
-Test-Path "$HOME\.mcuxpressotools\arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi"
-
-# Check SDK
-Test-Path "$HOME\mcimx93_evk\mcuxsdk"
-
-# Check prj.conf
-Test-Path ".\prj.conf"
+Test-Path $env:ARMGCC_DIR
+Test-Path "$env:SdkRootDirPath\mcuxsdk"
 ```
 
 **Linux/macOS (Bash):**
+
 ```bash
-# Check toolchain
-ls ~/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-*
-
-# Check SDK
-ls ~/mcimx93_evk/mcuxsdk
-
-# Check prj.conf
-ls -la prj.conf
+ls "$ARMGCC_DIR/bin/arm-none-eabi-gcc"
+ls "$SdkRootDirPath/mcuxsdk"
 ```
 
 ---
@@ -313,20 +249,9 @@ ls -la prj.conf
 ```
 Memory region         Used Size  Region Size  %age Used
 m_interrupts:            1140 B        1144 B     99.65%
-m_text:                 51624 B      129928 B     39.73%
+m_text:                 51776 B      129928 B     39.85%
 m_data:                 51480 B        108 KB     46.55%
 ```
-
----
-
-## Files Modified for Cross-Platform Support
-
-The following files contain OS-specific configurations:
-
-1. **`mcux_include.json`** - CMake presets with OS conditions
-2. **`.vscode/c_cpp_properties.json`** - IntelliSense configurations for each OS
-3. **`.vscode/mcuxpresso-tools.json`** - MCUXpresso project settings
-4. **`CMakeLists.txt`** - Compiler flags to suppress warnings
 
 ---
 
@@ -336,4 +261,4 @@ The following files contain OS-specific configurations:
 
 ---
 
-*Last updated: January 28, 2026*
+*Last updated: January 31, 2026*

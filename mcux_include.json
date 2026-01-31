@@ -14,10 +14,10 @@
         "rhs": "Windows"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/Scripts",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
@@ -33,10 +33,10 @@
         "rhs": "Linux"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
@@ -52,10 +52,10 @@
         "rhs": "Darwin"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
@@ -77,10 +77,10 @@
         "rhs": "Windows"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/Scripts",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
@@ -96,10 +96,10 @@
         "rhs": "Linux"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },
@@ -115,10 +115,10 @@
         "rhs": "Darwin"
       },
       "environment": {
-        "ARMGCC_DIR": "${sourceDir}/../.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi",
-        "SdkRootDirPath": "${sourceDir}/../mcimx93_evk",
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
         "BOARD": "mcimx93evk",
-        "MCUX_VENV_PATH": "${sourceDir}/../.mcuxpressotools/.venv/bin",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
         "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
       },

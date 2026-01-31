@@ -1,0 +1,21 @@
+# Build output
+debug/
+release/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Ninja
+.ninja_deps
+.ninja_log
+build.ninja
+
+# IDE
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
