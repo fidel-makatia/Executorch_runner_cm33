@@ -1,0 +1,39 @@
+{
+  "version": 7,
+  "cmakeMinimumRequired": {
+    "major": 3
+  },
+  "configurePresets": [
+    {
+      "name": "debug-env",
+      "displayName": "debug-env",
+      "hidden": true,
+      "environment": {
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
+        "POSTPROCESS_UTILITY": "$penv{POSTPROCESS_UTILITY}",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    },
+    {
+      "name": "release-env",
+      "displayName": "release-env",
+      "hidden": true,
+      "environment": {
+        "ARMGCC_DIR": "$penv{ARMGCC_DIR}",
+        "SdkRootDirPath": "$penv{SdkRootDirPath}",
+        "BOARD": "mcimx93evk",
+        "MCUX_VENV_PATH": "$penv{MCUX_VENV_PATH}",
+        "POSTPROCESS_UTILITY": "$penv{POSTPROCESS_UTILITY}",
+        "PATH": "$env{MCUX_VENV_PATH}${pathListSep}$penv{PATH}",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      },
+      "cacheVariables": {}
+    }
+  ],
+  "buildPresets": []
+}
