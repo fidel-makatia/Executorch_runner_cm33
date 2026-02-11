@@ -102,6 +102,10 @@
 #include "rsc_table.h"
 #include "arm_perf_monitor.h"
 
+extern "C" {
+void BOARD_InitHardware(void);
+}
+
 #if defined(ET_BUNDLE_IO)
 #include <executorch/devtools/bundled_program/bundled_program.h>
 #endif
@@ -1155,10 +1159,12 @@ bool run_model(RunnerContext& ctx, const void* model_pte) {
 } // namespace
 
 int main(int argc, const char* argv[]) {
+  BOARD_InitHardware();
   copyResourceTable();
 
   /* Early trace write — confirms trace buffer mechanism works */
   trace_write("CM33: ExecuTorch runner started\n", 32);
+  fprintf(stderr, "CM33: ExecuTorch runner started\r\n");
 
 #if defined(SEMIHOSTING)
   ET_LOG(Info, "Running executor with parameter:");
