@@ -11,8 +11,8 @@
  *
  * The trace buffer da (device address) is set at compile time so that
  * Linux remoteproc can translate it when parsing the ELF — before
- * main() runs.  The buffer is at TRACE_BUFFER_ADDR (0xa4020000) in
- * the vdevbuffer reserved memory region from the device tree.
+ * main() runs.  The buffer is in DTCM (m_rsc_tbl region) at offset
+ * 0x200, which imx_rproc can translate via its DTCM mapping.
  */
 
 #include <string.h>
@@ -22,8 +22,9 @@
  * Trace buffer — M33 output goes here, Linux reads it via:
  *   cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
  *
- * Points to the vdevbuffer reserved memory region (0xa4020000) from
- * the device tree.  Both M33 and Linux can access DDR at this address.
+ * Points to DTCM at TRACE_BUFFER_ADDR (0x2001E200), inside the
+ * m_rsc_tbl region after the resource table copy.  DTCM addresses
+ * are in the imx_rproc translation table so Linux can map them.
  */
 char *const rsc_trace_buf = (char *)TRACE_BUFFER_ADDR;
 
@@ -61,9 +62,11 @@ void copyResourceTable(void)
     /*
      * Copy the resource table into the m_rsc_tbl SRAM region.
      * Only clear the resource table area (not the whole 4KB region)
-     * to avoid clobbering the trace buffer at TRACE_BUFFER_ADDR which
-     * shares the m_rsc_tbl region.
+     * to avoid clobbering the trace buffer which shares this region.
      */
     memset((void *)RESOURCE_TABLE_START, 0, sizeof(resources));
     memcpy((void *)RESOURCE_TABLE_START, &resources, sizeof(resources));
+
+    /* Zero-initialize the trace buffer area */
+    memset((void *)TRACE_BUFFER_ADDR, 0, RSC_TRACE_BUF_SIZE);
 }

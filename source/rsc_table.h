@@ -28,12 +28,13 @@ extern "C" {
 #define RSC_TRACE_BUF_SIZE 0x800
 
 /*
- * Trace buffer address in the vdevbuffer reserved memory region.
- * Must match the device tree: vdevbuffer@a4020000
- * Visible in dmesg as: "assigned reserved memory node vdevbuffer@a4020000"
+ * Trace buffer address — placed in the m_rsc_tbl DTCM region at offset
+ * 0x200 (after the resource table copy, which is ~68 bytes).
+ * DTCM addresses (0x20000000-0x2001FFFF) are in the imx_rproc address
+ * translation table, so Linux can map them for trace0 access.
  */
 #ifndef TRACE_BUFFER_ADDR
-#define TRACE_BUFFER_ADDR 0xa4020000U
+#define TRACE_BUFFER_ADDR (RESOURCE_TABLE_START + 0x200U)  /* 0x2001E200 */
 #endif
 
 /* Resource types (from remoteproc spec) */
@@ -91,7 +92,7 @@ struct remote_resource_table {
  */
 void copyResourceTable(void);
 
-/* Trace buffer — points to OCRAM at TRACE_BUFFER_ADDR, readable from Linux via debugfs */
+/* Trace buffer — points to DTCM at TRACE_BUFFER_ADDR, readable from Linux via debugfs */
 extern char *const rsc_trace_buf;
 
 #if defined __cplusplus
