@@ -28,14 +28,12 @@ extern "C" {
 #define RSC_TRACE_BUF_SIZE 0x800
 
 /*
- * Trace buffer address in OCRAM shared memory.
- * Must be accessible to both M33 and Linux (remoteproc address translation).
- * Override via -DTRACE_BUFFER_ADDR=0x... if your device tree differs.
- *
- * Verify on your i.MX93 by inspecting reserved-memory nodes in the device tree.
+ * Trace buffer address in the vdevbuffer reserved memory region.
+ * Must match the device tree: vdevbuffer@a4020000
+ * Visible in dmesg as: "assigned reserved memory node vdevbuffer@a4020000"
  */
 #ifndef TRACE_BUFFER_ADDR
-#define TRACE_BUFFER_ADDR 0x20480000U
+#define TRACE_BUFFER_ADDR 0xa4020000U
 #endif
 
 /* Resource types (from remoteproc spec) */

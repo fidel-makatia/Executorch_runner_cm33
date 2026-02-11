@@ -93,6 +93,7 @@
 #include <executorch/runtime/platform/platform.h>
 #include <executorch/runtime/platform/runtime.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <memory>
 #include <vector>
@@ -303,7 +304,22 @@ et_tick_ratio_t et_pal_ticks_to_ns_multiplier(void) {
 }
 
 /**
+ * Write to the remoteproc trace buffer so Linux can read via:
+ *   cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
+ */
+static volatile uint32_t trace_idx = 0;
+
+static void trace_write(const char* buf, size_t len) {
+  if (trace_idx + len >= RSC_TRACE_BUF_SIZE)
+    return;
+  memcpy(&rsc_trace_buf[trace_idx], buf, len);
+  trace_idx += len;
+  rsc_trace_buf[trace_idx] = '\0';
+}
+
+/**
  * Emit a log message via platform output (serial port, console, etc).
+ * Also writes to the remoteproc trace buffer for trace0 access.
  */
 void et_pal_emit_log_message(
     ET_UNUSED et_timestamp_t timestamp,
@@ -313,14 +329,20 @@ void et_pal_emit_log_message(
     size_t line,
     const char* message,
     ET_UNUSED size_t length) {
-  fprintf(
-      stderr,
+  char buf[256];
+  int n = snprintf(
+      buf,
+      sizeof(buf),
       "%c [executorch:%s:%zu %s()] %s\n",
       level,
       filename,
       line,
       function,
       message);
+  if (n > 0) {
+    trace_write(buf, (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1);
+  }
+  fprintf(stderr, "%s", buf);
 }
 
 /**
