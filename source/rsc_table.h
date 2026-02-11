@@ -21,21 +21,28 @@ extern "C" {
 #define RESOURCE_TABLE_START 0x2001E000U
 #define RESOURCE_TABLE_SIZE  0x1000U
 
-/* Number of top-level resource entries */
-#define NO_RESOURCE_ENTRIES 2
+/* Number of top-level resource entries (trace only, no RPMsg vdev) */
+#define NO_RESOURCE_ENTRIES 1
 
 /* Trace buffer size (2 KB) */
 #define RSC_TRACE_BUF_SIZE 0x800
+
+/*
+ * Trace buffer address in OCRAM shared memory.
+ * Must be accessible to both M33 and Linux (remoteproc address translation).
+ * Override via -DTRACE_BUFFER_ADDR=0x... if your device tree differs.
+ *
+ * Verify on your i.MX93 by inspecting reserved-memory nodes in the device tree.
+ */
+#ifndef TRACE_BUFFER_ADDR
+#define TRACE_BUFFER_ADDR 0x20480000U
+#endif
 
 /* Resource types (from remoteproc spec) */
 #define RSC_CARVEOUT 0
 #define RSC_DEVMEM   1
 #define RSC_TRACE    2
 #define RSC_VDEV     3
-
-/* VirtIO RPMsg feature flags */
-#define VIRTIO_ID_RPMSG    7
-#define VIRTIO_RPMSG_F_NS  0   /* name-service announcement */
 
 /* ---- Struct definitions matching the remoteproc resource format ---- */
 
@@ -67,7 +74,9 @@ struct fw_rsc_vdev {
     uint8_t  reserved[2];
 };
 
-/* Top-level table that remoteproc parses from the .resource_table section */
+/* Top-level table that remoteproc parses from the .resource_table section.
+ * Trace-only: no RPMsg vdev, which avoids imx_rproc_kick timeout errors
+ * when the firmware doesn't implement virtio/RPMsg handling. */
 struct remote_resource_table {
     uint32_t version;
     uint32_t num;
@@ -76,11 +85,6 @@ struct remote_resource_table {
 
     /* Entry 0 — trace buffer */
     struct fw_rsc_trace trace;
-
-    /* Entry 1 — RPMsg VirtIO device */
-    struct fw_rsc_vdev  rpmsg_vdev;
-    struct fw_rsc_vdev_vring rpmsg_vring0;
-    struct fw_rsc_vdev_vring rpmsg_vring1;
 };
 
 /*
