@@ -1157,6 +1157,9 @@ bool run_model(RunnerContext& ctx, const void* model_pte) {
 int main(int argc, const char* argv[]) {
   copyResourceTable();
 
+  /* Early trace write — confirms trace buffer mechanism works */
+  trace_write("CM33: ExecuTorch runner started\n", 32);
+
 #if defined(SEMIHOSTING)
   ET_LOG(Info, "Running executor with parameter:");
   if (argc < 7) {
