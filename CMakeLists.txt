@@ -51,13 +51,6 @@ set_target_properties(${MCUX_SDK_PROJECT_NAME} PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
-# Place the trace buffer section at the OCRAM shared memory address so that
-# the resource table's da field (set at compile time) matches the actual buffer
-# location.  Verify this address against your device tree reserved-memory.
-target_link_options(${MCUX_SDK_PROJECT_NAME} PRIVATE
-    -Wl,--section-start=.bss.$rsc_trace=0x20480000
-)
-
 # Add C++ specific compiler flags
 target_compile_options(${MCUX_SDK_PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>

@@ -93,8 +93,8 @@ struct remote_resource_table {
  */
 void copyResourceTable(void);
 
-/* Trace buffer — readable from Linux via debugfs */
-extern char rsc_trace_buf[];
+/* Trace buffer — points to OCRAM at TRACE_BUFFER_ADDR, readable from Linux via debugfs */
+extern char *const rsc_trace_buf;
 
 #if defined __cplusplus
 }

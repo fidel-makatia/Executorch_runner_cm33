@@ -11,8 +11,8 @@
  *
  * The trace buffer da (device address) is set at compile time so that
  * Linux remoteproc can translate it when parsing the ELF — before
- * main() runs.  The buffer itself is placed at TRACE_BUFFER_ADDR via
- * the linker flag --section-start=.bss.$rsc_trace=<addr>.
+ * main() runs.  The buffer lives in OCRAM at TRACE_BUFFER_ADDR which
+ * is physically present on i.MX93 and accessible to both M33 and Linux.
  */
 
 #include <string.h>
@@ -22,11 +22,12 @@
  * Trace buffer — M33 output goes here, Linux reads it via:
  *   cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
  *
- * Placed in a dedicated section so the linker can position it at
- * TRACE_BUFFER_ADDR (see target_link_options in CMakeLists.txt).
+ * Points directly to OCRAM at TRACE_BUFFER_ADDR (0x20480000).
+ * No linker-placed allocation — the OCRAM is physically present on i.MX93.
+ * This avoids the problem where the SDK linker script's *(.bss*) wildcard
+ * would pull a .bss-prefixed section into TCM, mismatching the da field.
  */
-char rsc_trace_buf[RSC_TRACE_BUF_SIZE]
-    __attribute__((section(".bss.$rsc_trace"), used));
+char *const rsc_trace_buf = (char *)TRACE_BUFFER_ADDR;
 
 /*
  * The resource table itself — placed in .resource_table so the ELF
