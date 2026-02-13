@@ -1185,7 +1185,9 @@ int main(int argc, const char* argv[]) {
   (void)argv;
 #endif
 
+  trace_write("CM33: runtime_init...\n", 22);
   executorch::runtime::runtime_init();
+  trace_write("CM33: runtime_init done\n", 24);
   std::vector<std::pair<char*, size_t>> input_buffers;
 
 #if defined(ET_MODEL_PTE_ADDR)
@@ -1249,6 +1251,19 @@ int main(int argc, const char* argv[]) {
   }
 #endif
 
+  /* Check if model data looks valid before dereferencing */
+  {
+    char pte_msg[128];
+    int pte_n = snprintf(pte_msg, sizeof(pte_msg),
+        "CM33: model_pte @ %p, first bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
+        (void*)model_pte,
+        (unsigned char)model_pte[0], (unsigned char)model_pte[1],
+        (unsigned char)model_pte[2], (unsigned char)model_pte[3],
+        (unsigned char)model_pte[4], (unsigned char)model_pte[5],
+        (unsigned char)model_pte[6], (unsigned char)model_pte[7]);
+    if (pte_n > 0) trace_write(pte_msg, pte_n);
+  }
+
   // Byte 4-7 is usually a nice magic number that could be good to print to make
   // sure it's OK ETxx for PTE and BPxx for bundled pte where xx is a number.
   ET_LOG(
@@ -1260,7 +1275,9 @@ int main(int argc, const char* argv[]) {
       model_pte[6],
       model_pte[7]);
 
+  trace_write("CM33: calling runner_init...\n", 28);
   runner_init(ctx, input_buffers, pte_size);
+  trace_write("CM33: calling run_model...\n", 26);
   bool model_ok = run_model(ctx, model_pte);
   ET_LOG(Info, "Model run: %d", model_ok);
 

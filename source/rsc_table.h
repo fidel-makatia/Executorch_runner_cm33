@@ -24,8 +24,8 @@ extern "C" {
 /* Number of top-level resource entries (trace only, no RPMsg vdev) */
 #define NO_RESOURCE_ENTRIES 1
 
-/* Trace buffer size (2 KB) */
-#define RSC_TRACE_BUF_SIZE 0x800
+/* Trace buffer size (3 KB — fits in m_rsc_tbl after resource table at 0x200) */
+#define RSC_TRACE_BUF_SIZE 0xC00
 
 /*
  * Trace buffer address — placed in the m_rsc_tbl DTCM region at offset
