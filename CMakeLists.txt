@@ -22,28 +22,50 @@ mcux_add_source(
         source/rsc_table.c
 )
 
-# Add include directories for ExecuTorch
+# Add Ethos-U core driver source files
+mcux_add_source(
+    BASE_PATH ${SdkRootDirPath}
+    SOURCES
+        middleware/eiq/ethos-u-core-software/core_driver/src/ethosu_driver.c
+        middleware/eiq/ethos-u-core-software/core_driver/src/ethosu_device_u55_u65.c
+        middleware/eiq/ethos-u-core-software/core_driver/src/ethosu_pmu.c
+)
+
+# Add include directories for ExecuTorch and Ethos-U driver
 target_include_directories(${MCUX_SDK_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/include
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/include/executorch
     ${CMAKE_CURRENT_SOURCE_DIR}/source
+    ${SdkRootDirPath}/middleware/eiq/ethos-u-core-software/core_driver/include
+    ${SdkRootDirPath}/middleware/eiq/ethos-u-core-software/core_driver/src
 )
 
-# Add ExecuTorch static libraries
+# Add ExecuTorch static libraries (whole-archive for delegate + kernel registration)
+# Only quantized_ops needed: quantize_per_tensor.out and dequantize_per_tensor.out
 target_link_libraries(${MCUX_SDK_PROJECT_NAME} PRIVATE
+    -Wl,--whole-archive
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch_delegate_ethos_u.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libquantized_ops_lib_selective.a
+    -Wl,--no-whole-archive
+    ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libquantized_kernels.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libkernels_util_all_deps.a
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch.a
     ${CMAKE_CURRENT_SOURCE_DIR}/executorch/lib/libexecutorch_core.a
     m   # math library
     stdc++  # C++ standard library
 )
 
-# Add compile definitions for ExecuTorch
+# Add compile definitions for ExecuTorch and Ethos-U65
 target_compile_definitions(${MCUX_SDK_PROJECT_NAME} PRIVATE
-    ET_ARM_BAREMETAL_METHOD_ALLOCATOR_POOL_SIZE=0x4000    # 16KB
-    ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x2000  # 8KB
+    ET_ARM_BAREMETAL_METHOD_ALLOCATOR_POOL_SIZE=0x6000    # 24KB (reduced for stack room)
+    ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE=0x4000  # 16KB
     ET_MODEL_PTE_ADDR=0xC0000000
+    ETHOSU_ARCH=u65
+    ETHOSU65=1
+    ARM_MATH_CM33
+    __FPU_PRESENT=1
 )
+
 
 # Set C++ standard
 set_target_properties(${MCUX_SDK_PROJECT_NAME} PROPERTIES

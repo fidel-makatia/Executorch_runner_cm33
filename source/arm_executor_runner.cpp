@@ -93,6 +93,7 @@
 #include <executorch/runtime/platform/platform.h>
 #include <executorch/runtime/platform/runtime.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 #include <memory>
@@ -102,8 +103,175 @@
 #include "rsc_table.h"
 #include "arm_perf_monitor.h"
 
+/* Override operator new to detect allocation failures */
+static void trace_write(const char* buf, size_t len);
+void* operator new(size_t size) noexcept {
+    void* p = malloc(size);
+    if (!p) {
+        char msg[64];
+        int n = snprintf(msg, sizeof(msg), "CM33: new(%lu) FAILED!\n", (unsigned long)size);
+        if (n > 0) trace_write(msg, n);
+    }
+    return p;
+}
+void* operator new[](size_t size) noexcept {
+    void* p = malloc(size);
+    if (!p) {
+        char msg[64];
+        int n = snprintf(msg, sizeof(msg), "CM33: new[](%lu) FAILED!\n", (unsigned long)size);
+        if (n > 0) trace_write(msg, n);
+    }
+    return p;
+}
+void operator delete(void* p) noexcept { free(p); }
+void operator delete[](void* p) noexcept { free(p); }
+void operator delete(void* p, size_t) noexcept { free(p); }
+void operator delete[](void* p, size_t) noexcept { free(p); }
+
 extern "C" {
 void BOARD_InitHardware(void);
+}
+
+#include "ethosu_driver.h"
+#include "fsl_device_registers.h"
+static struct ethosu_driver ethosu_drv;
+
+extern "C" {
+/* Override the weak default IRQ handler for ML_IRQn (IRQ 178) */
+void Reserved194_IRQHandler(void) {
+    ethosu_irq_handler(&ethosu_drv);
+}
+
+/* HardFault handler - minimal, no snprintf to avoid stack issues */
+void HardFault_Handler(void) {
+    static const char hf_msg[] = "CM33: *** HARD FAULT ***\n";
+    extern volatile uint32_t trace_idx;
+    uint32_t idx = trace_idx;
+    for (unsigned i = 0; i < sizeof(hf_msg)-1 && idx < RSC_TRACE_BUF_SIZE-1; i++)
+        rsc_trace_buf[idx++] = hf_msg[i];
+    rsc_trace_buf[idx] = '\0';
+    trace_idx = idx;
+    while(1) { __NOP(); }
+}
+
+/* UsageFault handler with diagnostic info */
+void UsageFault_Handler(void) {
+    volatile uint32_t *sp;
+    __asm volatile("mrs %0, msp" : "=r"(sp));
+    uint32_t pc = sp[6];
+    uint32_t lr = sp[5];
+    uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;
+    uint16_t ufsr = (uint16_t)(cfsr >> 16);
+
+    extern volatile uint32_t trace_idx;
+    uint32_t idx = trace_idx;
+    /* Write a hex dump manually - no snprintf to avoid stack issues */
+    static const char hex[] = "0123456789abcdef";
+    static const char msg1[] = "CM33: USAGE FAULT PC=0x";
+    for (unsigned i = 0; i < sizeof(msg1)-1 && idx < RSC_TRACE_BUF_SIZE-1; i++)
+        rsc_trace_buf[idx++] = msg1[i];
+    for (int i = 28; i >= 0 && idx < RSC_TRACE_BUF_SIZE-1; i -= 4)
+        rsc_trace_buf[idx++] = hex[(pc >> i) & 0xf];
+    static const char msg2[] = " LR=0x";
+    for (unsigned i = 0; i < sizeof(msg2)-1 && idx < RSC_TRACE_BUF_SIZE-1; i++)
+        rsc_trace_buf[idx++] = msg2[i];
+    for (int i = 28; i >= 0 && idx < RSC_TRACE_BUF_SIZE-1; i -= 4)
+        rsc_trace_buf[idx++] = hex[(lr >> i) & 0xf];
+    static const char msg3[] = " UFSR=0x";
+    for (unsigned i = 0; i < sizeof(msg3)-1 && idx < RSC_TRACE_BUF_SIZE-1; i++)
+        rsc_trace_buf[idx++] = msg3[i];
+    for (int i = 12; i >= 0 && idx < RSC_TRACE_BUF_SIZE-1; i -= 4)
+        rsc_trace_buf[idx++] = hex[(ufsr >> i) & 0xf];
+    if (idx < RSC_TRACE_BUF_SIZE-1) rsc_trace_buf[idx++] = '\n';
+    rsc_trace_buf[idx] = '\0';
+    trace_idx = idx;
+    while(1) { __NOP(); }
+}
+
+/* BusFault: naked wrapper passes correct SP to C handler */
+__attribute__((naked)) void BusFault_Handler(void) {
+    __asm volatile(
+        "mrs r0, msp\n"
+        "b BusFault_Handler_C\n"
+    );
+}
+
+void BusFault_Handler_C(uint32_t *frame) {
+    /* frame points to hardware-pushed exception frame:
+       [0]=R0 [1]=R1 [2]=R2 [3]=R3 [4]=R12 [5]=LR [6]=PC [7]=xPSR */
+    uint32_t r0  = frame[0];
+    uint32_t r1  = frame[1];
+    uint32_t r2  = frame[2];
+    uint32_t r3  = frame[3];
+    uint32_t r12 = frame[4];
+    uint32_t lr  = frame[5];
+    uint32_t pc  = frame[6];
+    uint32_t psr = frame[7];
+    uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;
+    uint32_t bfar = *(volatile uint32_t *)0xE000ED38;
+    uint8_t bfsr_val = (uint8_t)((cfsr >> 8) & 0xFF);
+
+    extern volatile uint32_t trace_idx;
+    uint32_t idx = trace_idx; /* Append to existing trace */
+    static const char hex[] = "0123456789abcdef";
+
+    #define WRITE_STR(s) do { \
+        for (unsigned _i = 0; _i < sizeof(s)-1 && idx < RSC_TRACE_BUF_SIZE-1; _i++) \
+            rsc_trace_buf[idx++] = s[_i]; \
+    } while(0)
+    #define WRITE_HEX32(v) do { \
+        for (int _i = 28; _i >= 0 && idx < RSC_TRACE_BUF_SIZE-1; _i -= 4) \
+            rsc_trace_buf[idx++] = hex[((v) >> _i) & 0xf]; \
+    } while(0)
+
+    WRITE_STR("BF PC=");
+    WRITE_HEX32(pc);
+    WRITE_STR(" LR=");
+    WRITE_HEX32(lr);
+    WRITE_STR(" BFAR=");
+    WRITE_HEX32(bfar);
+    WRITE_STR(" BFSR=");
+    WRITE_HEX32((uint32_t)bfsr_val);
+    if (idx < RSC_TRACE_BUF_SIZE-1) rsc_trace_buf[idx++] = '\n';
+
+    WRITE_STR("R0=");
+    WRITE_HEX32(r0);
+    WRITE_STR(" R1=");
+    WRITE_HEX32(r1);
+    WRITE_STR(" R2=");
+    WRITE_HEX32(r2);
+    WRITE_STR(" R3=");
+    WRITE_HEX32(r3);
+    if (idx < RSC_TRACE_BUF_SIZE-1) rsc_trace_buf[idx++] = '\n';
+
+    WRITE_STR("R12=");
+    WRITE_HEX32(r12);
+    WRITE_STR(" xPSR=");
+    WRITE_HEX32(psr);
+    WRITE_STR(" SP=");
+    WRITE_HEX32((uint32_t)(frame + 8));
+    if (idx < RSC_TRACE_BUF_SIZE-1) rsc_trace_buf[idx++] = '\n';
+
+    /* Dump 32 stack words above exception frame for call chain */
+    WRITE_STR("STK:");
+    volatile uint32_t *stk = (volatile uint32_t *)(frame + 8);
+    for (int i = 0; i < 32 && idx < RSC_TRACE_BUF_SIZE - 12; i++) {
+        if (i % 4 == 0 && idx < RSC_TRACE_BUF_SIZE-1) {
+            rsc_trace_buf[idx++] = '\n';
+        } else {
+            rsc_trace_buf[idx++] = ' ';
+        }
+        WRITE_HEX32(stk[i]);
+    }
+    if (idx < RSC_TRACE_BUF_SIZE-1) rsc_trace_buf[idx++] = '\n';
+
+    #undef WRITE_STR
+    #undef WRITE_HEX32
+
+    rsc_trace_buf[idx] = '\0';
+    trace_idx = idx;
+    while(1) { __NOP(); }
+}
 }
 
 #if defined(ET_BUNDLE_IO)
@@ -260,9 +428,11 @@ const int num_inferences = 1;
  */
 const size_t temp_allocation_pool_size =
     ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE;
-unsigned char __attribute__((
-    section(".bss.tensor_arena"),
-    aligned(16))) temp_allocation_pool[temp_allocation_pool_size];
+/* NPU scratch must be in DDR (AXI-accessible), not DTCM.
+ * Place at fixed DDR address 0xC0100000 (1MB after model start).
+ * Reserved DDR region: 0xC0000000-0xC03FFFFF (4MB). */
+unsigned char* const temp_allocation_pool =
+    reinterpret_cast<unsigned char*>(0xC0100000);
 #if defined(ET_ARM_BAREMETAL_FAST_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE)
 extern "C" {
 size_t ethosu_fast_scratch_size =
@@ -290,8 +460,9 @@ void et_pal_init(void) {
  */
 
 ET_NORETURN void et_pal_abort(void) {
+  trace_write("CM33: *** ET_PAL_ABORT CALLED ***\n", 34);
 #if !defined(SEMIHOSTING)
-  __builtin_trap();
+  while(1) { __WFE(); }
 #else
   _exit(-1);
 #endif
@@ -311,7 +482,7 @@ et_tick_ratio_t et_pal_ticks_to_ns_multiplier(void) {
  * Write to the remoteproc trace buffer so Linux can read via:
  *   cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
  */
-static volatile uint32_t trace_idx = 0;
+volatile uint32_t trace_idx = 0;
 
 static void trace_write(const char* buf, size_t len) {
   if (trace_idx + len >= RSC_TRACE_BUF_SIZE)
@@ -319,6 +490,18 @@ static void trace_write(const char* buf, size_t len) {
   memcpy(&rsc_trace_buf[trace_idx], buf, len);
   trace_idx += len;
   rsc_trace_buf[trace_idx] = '\0';
+}
+
+/* C-linkage function for ethosu driver LOG_ERR/LOG_INFO to write to trace */
+extern "C" void ethosu_trace_log(const char* fmt, ...) {
+  char buf[256];
+  va_list args;
+  va_start(args, fmt);
+  int n = vsnprintf(buf, sizeof(buf), fmt, args);
+  va_end(args);
+  if (n > 0) {
+    trace_write(buf, (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1);
+  }
 }
 
 /**
@@ -337,11 +520,10 @@ void et_pal_emit_log_message(
   int n = snprintf(
       buf,
       sizeof(buf),
-      "%c [executorch:%s:%zu %s()] %s\n",
+      "%c [%s:%lu] %s\n",
       level,
       filename,
-      line,
-      function,
+      (unsigned long)line,
       message);
   if (n > 0) {
     trace_write(buf, (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1);
@@ -452,7 +634,7 @@ Error prepare_input_tensors(
     ET_CHECK_OK_OR_RETURN_ERROR(tag.error());
 
     if (tag.get() != Tag::Tensor) {
-      ET_LOG(Debug, "Skipping non-tensor input %zu", i);
+      ET_LOG(Debug, "Skipping non-tensor input %lu", i);
       continue;
     }
     Result<TensorInfo> tensor_meta = method_meta.input_tensor_meta(i);
@@ -530,14 +712,14 @@ std::pair<char*, size_t> read_binary_file(
   char* buffer = static_cast<char*>(allocator.allocate(file_size));
   if (buffer == nullptr) {
     ET_LOG(
-        Fatal, "Failed to allocate input file size:%zu", (uint32_t)file_size);
+        Fatal, "Failed to allocate input file size:%lu", (uint32_t)file_size);
     return std::make_pair(nullptr, 0);
   }
   auto read_size = fread(buffer, 1, file_size, fp);
   if (read_size != file_size) {
     ET_LOG(
         Info,
-        "Failed to read whole file (%), read %zu bytes!",
+        "Failed to read whole file (%), read %lu bytes!",
         filename,
         read_size);
   }
@@ -613,8 +795,9 @@ void runner_init(
         "Program loading failed @ 0x%p: 0x%" PRIx32,
         program_data,
         program.error());
+    /* Don't continue - abort here instead of crashing later */
+    while(1) { __WFE(); }
   }
-
   ET_LOG(Info, "Model buffer loaded, has %lu methods", program->num_methods());
 
   {
@@ -650,7 +833,7 @@ void runner_init(
   for (size_t id = 0; id < num_memory_planned_buffers; ++id) {
     size_t buffer_size =
         static_cast<size_t>(method_meta->memory_planned_buffer_size(id).get());
-    ET_LOG(Info, "Setting up planned buffer %zu, size %zu.", id, buffer_size);
+    ET_LOG(Info, "Setting up planned buffer %lu, size %lu.", id, buffer_size);
 
     /* Move to it's own allocator when MemoryPlanner is in place. */
     /* Ethos-U driver requires 16 bit alignment. */
@@ -658,7 +841,7 @@ void runner_init(
         ctx.method_allocator->allocate(buffer_size, 16UL));
     ET_CHECK_MSG(
         buffer != nullptr,
-        "Could not allocate memory for memory planned buffer size %zu",
+        "Could not allocate memory for memory planned buffer size %lu",
         buffer_size);
     planned_buffers.push_back(buffer);
     planned_spans.push_back({planned_buffers.back(), buffer_size});
@@ -726,7 +909,7 @@ void runner_init(
       ctx.debug_buffer = nullptr;
       ET_LOG(
           Error,
-          "ETDump: Could not set_debug_buffer() for output buffer size %zu error:0x%" PRIx32,
+          "ETDump: Could not set_debug_buffer() for output buffer size %lu error:0x%" PRIx32,
           ET_DEBUG_BUFFER_SIZE,
           result.error());
     }
@@ -734,7 +917,7 @@ void runner_init(
     // debug buffer allocation failed
     ET_LOG(
         Error,
-        "ETDump: Could not allocate memory for output buffer size %zu",
+        "ETDump: Could not allocate memory for output buffer size %lu",
         ET_DEBUG_BUFFER_SIZE);
   }
 #endif // defined(ET_DUMP_INTERMEDIATE_OUTPUTS) || defined(ET_DUMP_OUTPUTS)
@@ -779,7 +962,7 @@ void runner_init(
 #if defined(ET_LOG_DUMP_INPUT)
   {
     std::vector<EValue> inputs((*ctx.method.value())->inputs_size());
-    ET_LOG(Info, "%zu inputs: ", inputs.size());
+    ET_LOG(Info, "%lu inputs: ", inputs.size());
     Error status = ctx.method.value()->get_inputs(inputs.data(), inputs.size());
     ET_CHECK(status == Error::Ok);
 
@@ -850,7 +1033,7 @@ void log_mem_status(RunnerContext& ctx) {
   if (ctx.input_file_allocator->size() > 0) {
     ET_LOG(
         Info,
-        "input_file_allocator_used: %zu / %zu free: %zu ( used: %zu %% ) ",
+        "input_file_allocator_used: %lu / %lu free: %lu ( used: %lu %% ) ",
         ctx.input_file_allocator->used_size(),
         ctx.input_file_allocator->size(),
         ctx.input_file_allocator->free_size(),
@@ -862,24 +1045,24 @@ void log_mem_status(RunnerContext& ctx) {
     size_t method_allocator_used = ctx.method_allocator->used_size();
     ET_LOG(
         Info,
-        "method_allocator_used:     %zu / %zu  free: %zu ( used: %zu %% ) ",
+        "method_allocator_used:     %lu / %lu  free: %lu ( used: %lu %% ) ",
         method_allocator_used,
         ctx.method_allocator->size(),
         ctx.method_allocator->free_size(),
         100 * method_allocator_used / ctx.method_allocator->size());
     ET_LOG(
         Info,
-        "method_allocator_planned:  %zu bytes",
+        "method_allocator_planned:  %lu bytes",
         ctx.planned_buffer_memsize);
     ET_LOG(
         Info,
-        "method_allocator_loaded:   %zu bytes",
+        "method_allocator_loaded:   %lu bytes",
         ctx.method_loaded_memsize);
-    ET_LOG(Info, "method_allocator_input:    %zu bytes", ctx.input_memsize);
-    ET_LOG(Info, "method_allocator_executor: %zu bytes", executor_memsize);
+    ET_LOG(Info, "method_allocator_input:    %lu bytes", ctx.input_memsize);
+    ET_LOG(Info, "method_allocator_executor: %lu bytes", executor_memsize);
   }
   if (ctx.temp_allocator->size() > 0) {
-    ET_LOG(Info, "temp_allocator:            %zu", ctx.temp_allocator->size());
+    ET_LOG(Info, "temp_allocator:            %lu", ctx.temp_allocator->size());
   }
 #if defined(ET_EVENT_TRACER_ENABLED)
 #if defined(ET_DUMP_INTERMEDIATE_OUTPUTS) || defined(ET_DUMP_OUTPUTS)
@@ -887,7 +1070,7 @@ void log_mem_status(RunnerContext& ctx) {
     size_t outputdump_len = ctx.etdump_gen->get_data_sink()->get_used_bytes();
     ET_LOG(
         Info,
-        "ETDump_outputs_buffer:     %zu / %zu free: %zu ( used: %zu %% ) ",
+        "ETDump_outputs_buffer:     %lu / %lu free: %lu ( used: %lu %% ) ",
         outputdump_len,
         ET_DEBUG_BUFFER_SIZE,
         ET_DEBUG_BUFFER_SIZE - outputdump_len,
@@ -899,59 +1082,47 @@ void log_mem_status(RunnerContext& ctx) {
 
 void print_outputs(RunnerContext& ctx) {
   std::vector<EValue> outputs(ctx.method.value()->outputs_size());
-  ET_LOG(Info, "%zu outputs: ", outputs.size());
   Error status =
       ctx.method.value()->get_outputs(outputs.data(), outputs.size());
   ET_CHECK(status == Error::Ok);
 
-  // Print the outputs.
-  for (int i = 0; i < outputs.size(); ++i) {
+  char buf[128];
+  int n = snprintf(buf, sizeof(buf), "CM33: %d output(s):\n", (int)outputs.size());
+  if (n > 0) trace_write(buf, n);
+
+  for (int i = 0; i < (int)outputs.size(); ++i) {
     if (outputs[i].isTensor()) {
       Tensor tensor = outputs[i].toTensor();
-#if !defined(SEMIHOSTING)
-#if defined(ET_LOG_DUMP_OUTPUT)
-      // The output might be collected and parsed so printf() is used instead
-      // of ET_LOG() here
-      for (int j = 0; j < tensor.numel(); ++j) {
-        if (tensor.scalar_type() == ScalarType::Int) {
-          printf(
-              "Output[%d][%d]: (int) %d\n",
-              i,
-              j,
+      n = snprintf(buf, sizeof(buf), "  Output[%d]: dtype=%d, numel=%d, nbytes=%lu\n",
+          i, (int)tensor.scalar_type(), (int)tensor.numel(), (unsigned long)tensor.nbytes());
+      if (n > 0) trace_write(buf, n);
+
+      int limit = tensor.numel() < 32 ? tensor.numel() : 32;
+      for (int j = 0; j < limit; ++j) {
+        if (tensor.scalar_type() == ScalarType::Float) {
+          n = snprintf(buf, sizeof(buf), "    [%d]=%d (float raw)\n", j,
+              *(int*)&tensor.const_data_ptr<float>()[j]);
+        } else if (tensor.scalar_type() == ScalarType::Int) {
+          n = snprintf(buf, sizeof(buf), "    [%d]=%d\n", j,
               tensor.const_data_ptr<int>()[j]);
-        } else if (tensor.scalar_type() == ScalarType::Float) {
-          printf(
-              "Output[%d][%d]: (float) %f\n",
-              i,
-              j,
-              tensor.const_data_ptr<float>()[j]);
-        } else if (tensor.scalar_type() == ScalarType::Char) {
-          printf(
-              "Output[%d][%d]: (char) %d\n",
-              i,
-              j,
-              tensor.const_data_ptr<int8_t>()[j]);
-        } else if (tensor.scalar_type() == ScalarType::Bool) {
-          printf(
-              "Output[%d][%d]: (bool) %s (0x%x)\n",
-              i,
-              j,
-              tensor.const_data_ptr<int8_t>()[j] ? "true " : "false",
-              tensor.const_data_ptr<int8_t>()[j]);
+        } else if (tensor.scalar_type() == ScalarType::Char ||
+                   tensor.scalar_type() == ScalarType::Byte) {
+          n = snprintf(buf, sizeof(buf), "    [%d]=%d\n", j,
+              (int)tensor.const_data_ptr<int8_t>()[j]);
+        } else {
+          n = snprintf(buf, sizeof(buf), "    [%d]=0x%02x\n", j,
+              (unsigned)((const unsigned char*)tensor.const_data_ptr<char>())[j]);
         }
+        if (n > 0) trace_write(buf, n);
       }
-#endif
-#else //! defined(SEMIHOSTING)
-      char out_filename[255];
-      snprintf(out_filename, 255, "%s-%d.bin", ctx.output_basename, i);
-      ET_LOG(Info, "Writing output to file: %s", out_filename);
-      FILE* out_file = fopen(out_filename, "wb");
-      auto written_size =
-          fwrite(tensor.const_data_ptr<char>(), 1, tensor.nbytes(), out_file);
-      fclose(out_file);
-#endif //! defined(SEMIHOSTING)
+      if (tensor.numel() > limit) {
+        n = snprintf(buf, sizeof(buf), "    ... (%d more elements)\n",
+            (int)tensor.numel() - limit);
+        if (n > 0) trace_write(buf, n);
+      }
     } else {
-      printf("Output[%d]: Not Tensor\n", i);
+      n = snprintf(buf, sizeof(buf), "  Output[%d]: not a tensor\n", i);
+      if (n > 0) trace_write(buf, n);
     }
   }
 }
@@ -1034,7 +1205,7 @@ void write_etdump(RunnerContext& ctx) {
     } else {
       ET_LOG(
           Error,
-          "Could not allocate memory etdump base64 encoding size %zu",
+          "Could not allocate memory etdump base64 encoding size %lu",
           encoded_etdump_len + 1);
     }
   }
@@ -1162,9 +1333,22 @@ int main(int argc, const char* argv[]) {
   BOARD_InitHardware();
   copyResourceTable();
 
-  /* Early trace write — confirms trace buffer mechanism works */
+  /* Enable individual fault handlers (UsageFault, BusFault, MemManage) */
+  SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk | SCB_SHCSR_MEMFAULTENA_Msk;
+
+  /* Initialize Ethos-U65 NPU driver */
+  trace_write("CM33: ethosu_init starting...\n", 30);
+  if (ethosu_init(&ethosu_drv, (void*)0x4A900000, NULL, 0, 0, 0) != 0) {
+    trace_write("CM33: ethosu_init FAILED\n", 25);
+  }
+  trace_write("CM33: ethosu_init done\n", 23);
+
+  /* Enable NPU interrupt on CM33 NVIC */
+  NVIC_SetPriority(ML_IRQn, 5);
+  NVIC_EnableIRQ(ML_IRQn);
+  trace_write("CM33: NPU IRQ enabled\n", 22);
+
   trace_write("CM33: ExecuTorch runner started\n", 32);
-  fprintf(stderr, "CM33: ExecuTorch runner started\r\n");
 
 #if defined(SEMIHOSTING)
   ET_LOG(Info, "Running executor with parameter:");
@@ -1185,9 +1369,7 @@ int main(int argc, const char* argv[]) {
   (void)argv;
 #endif
 
-  trace_write("CM33: runtime_init...\n", 22);
   executorch::runtime::runtime_init();
-  trace_write("CM33: runtime_init done\n", 24);
   std::vector<std::pair<char*, size_t>> input_buffers;
 
 #if defined(ET_MODEL_PTE_ADDR)
@@ -1251,19 +1433,6 @@ int main(int argc, const char* argv[]) {
   }
 #endif
 
-  /* Check if model data looks valid before dereferencing */
-  {
-    char pte_msg[128];
-    int pte_n = snprintf(pte_msg, sizeof(pte_msg),
-        "CM33: model_pte @ %p, first bytes: %02x %02x %02x %02x %02x %02x %02x %02x\n",
-        (void*)model_pte,
-        (unsigned char)model_pte[0], (unsigned char)model_pte[1],
-        (unsigned char)model_pte[2], (unsigned char)model_pte[3],
-        (unsigned char)model_pte[4], (unsigned char)model_pte[5],
-        (unsigned char)model_pte[6], (unsigned char)model_pte[7]);
-    if (pte_n > 0) trace_write(pte_msg, pte_n);
-  }
-
   // Byte 4-7 is usually a nice magic number that could be good to print to make
   // sure it's OK ETxx for PTE and BPxx for bundled pte where xx is a number.
   ET_LOG(
@@ -1275,9 +1444,10 @@ int main(int argc, const char* argv[]) {
       model_pte[6],
       model_pte[7]);
 
-  trace_write("CM33: calling runner_init...\n", 28);
   runner_init(ctx, input_buffers, pte_size);
-  trace_write("CM33: calling run_model...\n", 26);
+  /* Reset trace buffer before inference to capture output clearly (3KB limit) */
+  trace_idx = 0;
+  rsc_trace_buf[0] = '\0';
   bool model_ok = run_model(ctx, model_pte);
   ET_LOG(Info, "Model run: %d", model_ok);
 
