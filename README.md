@@ -1,13 +1,13 @@
 # ExecuTorch Runner for i.MX93 Cortex-M33 + Ethos-U65 NPU
 
-Run [ExecuTorch](https://github.com/pytorch/executorch) ML inference on the **Ethos-U65 NPU** of the NXP i.MX93 EVK, controlled by the Cortex-M33 core via Linux remoteproc.
+Run [ExecuTorch](https://github.com/pytorch/executorch) ML inference on the **Ethos-U65 NPU** of the NXP i.MX93, controlled by the Cortex-M33 core via Linux remoteproc. Tested with MobileNet V2 (1000-class ImageNet classification, 100% NPU utilization).
 
 ```
 Linux (A55) ──remoteproc──> CM33 firmware ──AXI──> Ethos-U65 NPU
                               │                      │
-                              │ DTCM (108KB data)     │ DDR (4MB reserved)
-                              │ ITCM (128KB code)     │ model @ 0xC0000000
-                              │                       │ scratch @ 0xC0100000
+                              │ DTCM (108KB data)     │ DDR model   @ 0xC0000000 (4MB)
+                              │ ITCM (128KB code)     │ DDR scratch @ 0xA8000000 (128MB ethosu_region)
+                              │                       │ DDR planned @ 0xA8200000
 ```
 
 The firmware loads a `.pte` model from DDR, delegates computation to the Ethos-U65 NPU, and reports results via the remoteproc trace buffer (`trace0`).
@@ -16,11 +16,11 @@ The firmware loads a `.pte` model from DDR, delegates computation to the Ethos-U
 
 ## Prerequisites
 
-- **MCUXpresso SDK 25.9.0** for i.MX93 EVK (install via MCUXpresso for VS Code extension or [mcuxpresso.nxp.com](https://mcuxpresso.nxp.com))
-- **ARM GCC Toolchain 14.2.rel1** ([developer.arm.com](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads))
+- **MCUXpresso SDK** for i.MX93 EVK (install via MCUXpresso for VS Code extension or [mcuxpresso.nxp.com](https://mcuxpresso.nxp.com))
+- **Arm GNU Toolchain** (install via MCUXpresso Installer — select "Arm GNU Toolchain (Latest)")
 - **CMake** 3.22.0+
 - **Ninja** build system
-- **i.MX93 EVK** running Linux with remoteproc support and Ethos-U kernel driver bound
+- **i.MX93 FRDM** running Linux with remoteproc support and Ethos-U kernel driver bound
 
 ---
 
@@ -28,21 +28,30 @@ The firmware loads a `.pte` model from DDR, delegates computation to the Ethos-U
 
 ### 1. Set Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `ARMGCC_DIR` | ARM GCC toolchain root | `$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-...` |
-| `SdkRootDirPath` | Folder **containing** `mcuxsdk/` subdirectory | `$HOME/mcuxsdk_root` |
+Find your installed toolchain directory name:
+
+```bash
+# Linux/macOS
+ls ~/.mcuxpressotools/arm-gnu-toolchain-*
+
+# Windows (PowerShell)
+dir $env:USERPROFILE\.mcuxpressotools\arm-gnu-toolchain-*
+```
+
+Use the directory name from the output below (version number may differ).
+
+| Variable | Description |
+|----------|-------------|
+| `ARMGCC_DIR` | Path to the Arm GCC toolchain directory found above |
+| `SdkRootDirPath` | Path to the folder **containing** the `mcuxsdk/` subdirectory |
+| `MCUX_VENV_PATH` | Path to the MCUXpresso Python venv executables |
 
 <details>
 <summary><b>macOS (Zsh)</b></summary>
 
 ```bash
-# Add to ~/.zshrc
-# Apple Silicon:
-export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi"
-# Intel:
-# export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi"
-
+# Add to ~/.zshrc — replace <toolchain-dir> with the directory name found above
+export ARMGCC_DIR="$HOME/.mcuxpressotools/<toolchain-dir>"
 export SdkRootDirPath="$HOME/mcuxsdk_root"
 export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
 
@@ -54,8 +63,8 @@ source ~/.zshrc
 <summary><b>Linux (Bash)</b></summary>
 
 ```bash
-# Add to ~/.bashrc
-export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi"
+# Add to ~/.bashrc — replace <toolchain-dir> with the directory name found above
+export ARMGCC_DIR="$HOME/.mcuxpressotools/<toolchain-dir>"
 export SdkRootDirPath="$HOME/mcuxsdk_root"
 export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
 
@@ -67,7 +76,8 @@ source ~/.bashrc
 <summary><b>Windows (PowerShell)</b></summary>
 
 ```powershell
-[Environment]::SetEnvironmentVariable("ARMGCC_DIR", "$env:USERPROFILE\.mcuxpressotools\arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi", "User")
+# Replace <toolchain-dir> with the directory name found above
+[Environment]::SetEnvironmentVariable("ARMGCC_DIR", "$env:USERPROFILE\.mcuxpressotools\<toolchain-dir>", "User")
 [Environment]::SetEnvironmentVariable("SdkRootDirPath", "$env:USERPROFILE\mcuxsdk_root", "User")
 [Environment]::SetEnvironmentVariable("MCUX_VENV_PATH", "$env:USERPROFILE\.mcuxpressotools\.venv\Scripts", "User")
 ```
@@ -98,17 +108,38 @@ cmake --preset debug
 cmake --build debug
 ```
 
-### 4. Load Model to DDR via U-Boot
+### 4. Load Model to DDR
 
-The firmware expects a `.pte` model at DDR address `0xC0000000`. Load it via U-Boot before booting Linux:
+The firmware reads a `.pte` model from DDR address `0xC0000000`. The model must be compiled with the Ethos-U65 delegate (see [the learning path](https://github.com/fidel-makatia/arm-learning-paths) for compilation instructions).
+
+**Option A — From Linux via `/dev/mem` (no reboot required):**
+
+Copy the `.pte` file to the board and write it to DDR:
+
+```bash
+scp mobilenetv2_u65.pte root@<board-ip>:/tmp/
+
+# On the board
+python3 -c "
+import mmap, os
+pte = open('/tmp/mobilenetv2_u65.pte', 'rb').read()
+fd = os.open('/dev/mem', os.O_RDWR | os.O_SYNC)
+m = mmap.mmap(fd, len(pte), mmap.MAP_SHARED, mmap.PROT_WRITE, offset=0xC0000000)
+m.write(pte)
+m.close()
+os.close(fd)
+print(f'Wrote {len(pte)} bytes to 0xC0000000')
+"
+```
+
+**Option B — Via U-Boot (requires reboot):**
+
+Copy the `.pte` file to the first partition of the SD card, then load it in U-Boot before booting Linux:
 
 ```
-# In U-Boot console
-fatload mmc 0:1 0xc0000000 model_u65.pte
-boot
+u-boot=> fatload mmc 0:1 0xc0000000 mobilenetv2_u65.pte
+u-boot=> boot
 ```
-
-The model must be compiled with the Ethos-U65 delegate.
 
 ### 5. Deploy and Run
 
@@ -120,22 +151,25 @@ scp debug/executorch_runner_cm33.elf root@<board-ip>:/lib/firmware/
 echo stop > /sys/class/remoteproc/remoteproc0/state 2>/dev/null
 echo executorch_runner_cm33.elf > /sys/class/remoteproc/remoteproc0/firmware
 echo start > /sys/class/remoteproc/remoteproc0/state
-sleep 3
+sleep 15
 cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
 ```
 
-Expected output:
+Expected output (MobileNet V2):
 ```
-I: ethosu_init. base_address=0x4a900000
 NPU config match
 NPU arch match
 cmd_end_reached 0x1
+bus_status_error 0x0
 1 inferences finished
-Output[0]: dtype=6, numel=1, nbytes=4
-  [0]=1073741824 (float raw)     <- 0x40000000 = 2.0f
-Model run: 1
+Output[0]: dtype=6, numel=1000, nbytes=4000
+    [0]=0 (float raw)
+    [1]=1058744595 (float raw)
+    ...
 Program complete, exiting.
 ```
+
+The model outputs 1000 values — one score per ImageNet class. With random input, the scores are arbitrary. To get meaningful predictions, feed a real 224x224 RGB image.
 
 ---
 
@@ -158,15 +192,20 @@ The `executorch/lib/` directory contains pre-built static libraries for Cortex-M
 
 ## Memory Layout
 
+The i.MX93 device tree reserves two DDR regions for the Ethos-U subsystem:
+
 | Region | Address | Size | Contents |
 |--------|---------|------|----------|
 | ITCM (m_text) | 0x0FFE0000 | 128KB | Code + rodata |
 | DTCM (m_data) | 0x20003000 | 108KB | Data, BSS, heap, stack |
-| DDR (model) | 0xC0000000 | up to ~3.3MB | `.pte` model file |
-| DDR (scratch) | 0xC0100000 | 16KB | NPU scratch buffer |
-| DDR (reserved) | 0xC0000000-0xC03FFFFF | 4MB | Total reserved via device tree |
+| DDR (model) | 0xC0000000 | 4MB | `.pte` model file (reserved via `model@c0000000`) |
+| DDR (scratch) | 0xA8000000 | 2MB | NPU scratch buffer (inside `ethosu_region@A8000000`) |
+| DDR (planned) | 0xA8200000 | 32MB | Activation tensors for large models (inside `ethosu_region@A8000000`) |
+| DDR (ethosu_region) | 0xA8000000 | 128MB | Total Ethos-U working memory reserved via device tree |
 
-### Build Size (example)
+Small models (e.g., a simple add model) allocate planned buffers in DTCM. Large models like MobileNet V2 (which needs 752KB of planned buffers) automatically use the DDR ethosu_region instead.
+
+### Build Size
 
 ```
 Memory region         Used Size  Region Size  %age Used
@@ -183,13 +222,16 @@ The Ethos-U65 NPU must be powered and clocked by the Linux kernel driver before 
 
 ### Device Tree
 
-Ensure your device tree reserves 4MB of DDR for the CM33 model:
+The NXP BSP for the FRDM-IMX93 reserves two DDR regions by default:
 
 ```dts
 reserved-memory {
-    /* ... */
-    ethosu_mem: ethosu@c0000000 {
-        reg = <0 0xc0000000 0 0x400000>;
+    model@c0000000 {
+        reg = <0 0xc0000000 0 0x400000>;   /* 4MB for .pte model */
+        no-map;
+    };
+    ethosu_region@A8000000 {
+        reg = <0 0xa8000000 0 0x8000000>;  /* 128MB for NPU working memory */
         no-map;
     };
 };
@@ -226,7 +268,8 @@ If you prefer VS Code with the MCUXpresso extension:
 |---------|-------|-----|
 | BUS FAULT during `load_method` (vtable corruption) | GOT section not initialized | Run `./patches/apply_patches.sh` |
 | `resolve_operator` error for `quantized_decomposed::*` | Missing CPU kernel for quantize/dequantize ops | Already fixed — `libquantized_ops_lib_selective.a` is linked |
-| NPU bus error (`bus_status_error 0x1`) | Scratch buffer in DTCM (not AXI-accessible by NPU) | Already fixed — scratch mapped to DDR `0xC0100000` |
+| NPU bus error (`bus_status_error 0x1`) | Scratch buffer in DTCM (not AXI-accessible by NPU) | Already fixed — scratch mapped to DDR `0xA8000000` |
+| Memory allocation failed for planned buffer | Model activations too large for DTCM | Already fixed — large models auto-use DDR `0xA8200000` |
 | NPU errors invisible in `trace0` | Driver logs go to UART only | Run `./patches/apply_patches.sh` |
 | Log shows literal "zu" instead of numbers | nano printf doesn't support `%zu` | Already fixed — uses `%lu` with `(unsigned long)` cast |
 | Firmware hangs at NPU init | Linux ethosu driver not loaded | Ensure `/dev/ethosu0` exists |
@@ -239,11 +282,11 @@ If you prefer VS Code with the MCUXpresso extension:
 
 ### Key Design Decisions
 
-1. **NPU scratch in DDR, not DTCM** — The Ethos-U65 accesses memory via the AXI bus. CM33 DTCM (0x20003000) is tightly-coupled and not AXI-accessible. The scratch buffer is mapped to DDR `0xC0100000` (1MB after model start).
+1. **NPU working memory in ethosu_region** — The Ethos-U65 accesses memory via the AXI bus. CM33 DTCM (0x20003000) is tightly-coupled and not AXI-accessible. The scratch buffer and large planned buffers are placed in the 128MB `ethosu_region@A8000000` reserved by the device tree.
 
-2. **Selective operator registration** — Only `quantize_per_tensor.out` and `dequantize_per_tensor.out` are registered. These are the CPU ops at the NPU delegation boundary. Full registration overflows ITCM.
+2. **Automatic DTCM/DDR planned buffer placement** — Small models (activations < 12KB) allocate planned buffers from the DTCM method allocator. Large models like MobileNet V2 (752KB planned buffers) automatically use DDR. No configuration change is needed when switching between models.
 
-3. **BusFault handler with naked wrapper** — Uses `__attribute__((naked))` to read the correct MSP exception frame, bypassing the compiler's prologue that corrupts the stack pointer.
+3. **Selective operator registration** — Only `quantize_per_tensor.out` and `dequantize_per_tensor.out` are registered. These are the CPU ops at the NPU delegation boundary. Full registration overflows ITCM.
 
 4. **Trace buffer for all output** — All inference results, NPU driver messages, and diagnostics go to the 3KB remoteproc trace buffer, readable from Linux via `cat /sys/kernel/debug/remoteproc/remoteproc0/trace0`.
 
@@ -257,7 +300,7 @@ Executorch_runner_cm33/
 ├── CMakePresets.json            # CMake presets (debug/release)
 ├── mcux_include.json            # Environment variable bindings
 ├── source/
-│   ├── arm_executor_runner.cpp  # Main firmware (inference loop + all fixes)
+│   ├── arm_executor_runner.cpp  # Main firmware (inference loop, memory management)
 │   ├── arm_memory_allocator.cpp # Memory allocator
 │   ├── rsc_table.c              # Remoteproc resource table
 │   └── *.h                      # Headers
@@ -267,7 +310,6 @@ Executorch_runner_cm33/
 ├── patches/
 │   ├── apply_patches.sh         # One-time SDK patch script
 │   └── ethosu_log.h             # Patched Ethos-U driver log header
-├── SETUP.md                     # Detailed fix documentation
 └── debug/                       # Build output (generated)
 ```
 

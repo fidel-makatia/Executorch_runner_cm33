@@ -428,11 +428,21 @@ const int num_inferences = 1;
  */
 const size_t temp_allocation_pool_size =
     ET_ARM_BAREMETAL_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE;
-/* NPU scratch must be in DDR (AXI-accessible), not DTCM.
- * Place at fixed DDR address 0xC0100000 (1MB after model start).
- * Reserved DDR region: 0xC0000000-0xC03FFFFF (4MB). */
+/* NPU scratch and planned buffers must be in DDR (AXI-accessible), not DTCM.
+ * The device tree reserves two DDR regions:
+ *   model@c0000000:        0xC0000000 - 0xC03FFFFF (4MB) — .pte model data
+ *   ethosu_region@A8000000: 0xA8000000 - 0xAFFFFFFF (128MB) — NPU working memory
+ * Place scratch at start of ethosu_region, planned buffers after it. */
 unsigned char* const temp_allocation_pool =
-    reinterpret_cast<unsigned char*>(0xC0100000);
+    reinterpret_cast<unsigned char*>(0xA8000000);
+
+/* Planned buffer pool in DDR for large models (e.g. MobileNetV2).
+ * Placed at 0xA8200000 (2MB into ethosu_region), leaving plenty of
+ * room for activation tensors. Small models that fit in DTCM will
+ * still use the method allocator instead. */
+unsigned char* const planned_buffer_ddr_pool =
+    reinterpret_cast<unsigned char*>(0xA8200000);
+const size_t planned_buffer_ddr_pool_size = 0x2000000; /* 32MB */
 #if defined(ET_ARM_BAREMETAL_FAST_SCRATCH_TEMP_ALLOCATOR_POOL_SIZE)
 extern "C" {
 size_t ethosu_fast_scratch_size =
@@ -830,25 +840,54 @@ void runner_init(
 
   size_t planned_buffer_membase = ctx.method_allocator->used_size();
 
+  /* Check total planned buffer size to decide DTCM vs DDR allocation. */
+  size_t total_planned_size = 0;
+  for (size_t id = 0; id < num_memory_planned_buffers; ++id) {
+    total_planned_size +=
+        static_cast<size_t>(method_meta->memory_planned_buffer_size(id).get());
+  }
+
+  bool use_ddr_planned = (total_planned_size > method_allocation_pool_size / 2);
+  size_t ddr_planned_offset = 0;
+
+  if (use_ddr_planned) {
+    ET_LOG(Info, "Planned buffers total %lu bytes — using DDR pool at 0xC0200000",
+        (unsigned long)total_planned_size);
+    ET_CHECK_MSG(
+        total_planned_size <= planned_buffer_ddr_pool_size,
+        "Planned buffers (%lu) exceed DDR pool (%lu)",
+        (unsigned long)total_planned_size,
+        (unsigned long)planned_buffer_ddr_pool_size);
+  }
+
   for (size_t id = 0; id < num_memory_planned_buffers; ++id) {
     size_t buffer_size =
         static_cast<size_t>(method_meta->memory_planned_buffer_size(id).get());
-    ET_LOG(Info, "Setting up planned buffer %lu, size %lu.", id, buffer_size);
+    ET_LOG(Info, "Setting up planned buffer %lu, size %lu.", (unsigned long)id,
+        (unsigned long)buffer_size);
 
-    /* Move to it's own allocator when MemoryPlanner is in place. */
-    /* Ethos-U driver requires 16 bit alignment. */
-    uint8_t* buffer = reinterpret_cast<uint8_t*>(
-        ctx.method_allocator->allocate(buffer_size, 16UL));
-    ET_CHECK_MSG(
-        buffer != nullptr,
-        "Could not allocate memory for memory planned buffer size %lu",
-        buffer_size);
+    uint8_t* buffer;
+    if (use_ddr_planned) {
+      /* Align to 16 bytes in DDR */
+      ddr_planned_offset = (ddr_planned_offset + 15UL) & ~15UL;
+      buffer = planned_buffer_ddr_pool + ddr_planned_offset;
+      ddr_planned_offset += buffer_size;
+    } else {
+      /* Small model — allocate from DTCM method allocator */
+      buffer = reinterpret_cast<uint8_t*>(
+          ctx.method_allocator->allocate(buffer_size, 16UL));
+      ET_CHECK_MSG(
+          buffer != nullptr,
+          "Could not allocate memory for memory planned buffer size %lu",
+          (unsigned long)buffer_size);
+    }
     planned_buffers.push_back(buffer);
     planned_spans.push_back({planned_buffers.back(), buffer_size});
   }
 
-  ctx.planned_buffer_memsize =
-      ctx.method_allocator->used_size() - planned_buffer_membase;
+  ctx.planned_buffer_memsize = use_ddr_planned
+      ? ddr_planned_offset
+      : ctx.method_allocator->used_size() - planned_buffer_membase;
 
   HierarchicalAllocator planned_memory(
       {planned_spans.data(), planned_spans.size()});
