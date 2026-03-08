@@ -1,285 +1,274 @@
-# ExecuTorch Runner CM33 - MCUXpresso Setup Guide
+# ExecuTorch Runner for i.MX93 Cortex-M33 + Ethos-U65 NPU
 
-This guide documents how to set up, build, and deploy the ExecuTorch Runner project for the i.MX93 Cortex-M33 using VS Code with the MCUXpresso extension.
+Run [ExecuTorch](https://github.com/pytorch/executorch) ML inference on the **Ethos-U65 NPU** of the NXP i.MX93 EVK, controlled by the Cortex-M33 core via Linux remoteproc.
 
-> **Cross-Platform Support**: This project works on Windows, Linux, and macOS. Paths are resolved through environment variables, so you can clone the project anywhere on your filesystem.
+```
+Linux (A55) ──remoteproc──> CM33 firmware ──AXI──> Ethos-U65 NPU
+                              │                      │
+                              │ DTCM (108KB data)     │ DDR (4MB reserved)
+                              │ ITCM (128KB code)     │ model @ 0xC0000000
+                              │                       │ scratch @ 0xC0100000
+```
 
----
-
-## Table of Contents
-
-- [Prerequisites](#prerequisites)
-- [Step 1: Set Environment Variables](#step-1-set-environment-variables)
-- [Step 2: Clone the Repository](#step-2-clone-the-repository)
-- [Step 3: Open in VS Code](#step-3-open-in-vs-code)
-- [Step 4: Configure and Build](#step-4-configure-and-build)
-- [Command Line Build](#command-line-build)
-- [Deployment to i.MX93](#deployment-to-imx93)
-- [Troubleshooting](#troubleshooting)
+The firmware loads a `.pte` model from DDR, delegates computation to the Ethos-U65 NPU, and reports results via the remoteproc trace buffer (`trace0`).
 
 ---
 
 ## Prerequisites
 
-- **VS Code** with the [MCUXpresso for VS Code](https://marketplace.visualstudio.com/items?itemName=nxpsemiconductors.mcuxpresso) extension installed
-- **MCUXpresso SDK 25.9.0** for i.MX93 EVK (install via the MCUXpresso extension)
-- **ARM GCC Toolchain 14.2.rel1** (install via the MCUXpresso extension)
-- **Git**
-- **CMake** 3.22.0 or later
+- **MCUXpresso SDK 25.9.0** for i.MX93 EVK (install via MCUXpresso for VS Code extension or [mcuxpresso.nxp.com](https://mcuxpresso.nxp.com))
+- **ARM GCC Toolchain 14.2.rel1** ([developer.arm.com](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads))
+- **CMake** 3.22.0+
 - **Ninja** build system
+- **i.MX93 EVK** running Linux with remoteproc support and Ethos-U kernel driver bound
 
 ---
 
-## Step 1: Set Environment Variables
+## Quick Start
 
-The build system reads three environment variables to locate your toolchain and SDK. Set these **once** for your user account so every project picks them up automatically.
+### 1. Set Environment Variables
 
-### Required Variables
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `ARMGCC_DIR` | ARM GCC toolchain root | `$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-...` |
+| `SdkRootDirPath` | Folder **containing** `mcuxsdk/` subdirectory | `$HOME/mcuxsdk_root` |
 
-| Variable | Description | Example Value |
-|----------|-------------|---------------|
-| `ARMGCC_DIR` | Path to the ARM GCC toolchain root | See platform table below |
-| `SdkRootDirPath` | Path to the folder **containing** the `mcuxsdk/` subdirectory | See platform table below |
-| `MCUX_VENV_PATH` | Path to the MCUXpresso Python venv executables | See platform table below |
-
-### Toolchain Directory Names by Platform
-
-| Platform | Toolchain Directory Name |
-|----------|-------------------------|
-| Windows | `arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi` |
-| Linux (x86_64) | `arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi` |
-| macOS (Apple Silicon) | `arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi` |
-| macOS (Intel) | `arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi` |
-
-### Windows (PowerShell - persistent for current user)
-
-```powershell
-# Set ARMGCC_DIR (adjust the path if you installed the toolchain elsewhere)
-[Environment]::SetEnvironmentVariable("ARMGCC_DIR", "$env:USERPROFILE\.mcuxpressotools\arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi", "User")
-
-# Set SdkRootDirPath (the folder that contains the mcuxsdk/ subdirectory)
-[Environment]::SetEnvironmentVariable("SdkRootDirPath", "$env:USERPROFILE\mcuxsdk_root", "User")
-
-# Set MCUX_VENV_PATH (adjust if your venv has a different name, e.g. .venv_3_11)
-[Environment]::SetEnvironmentVariable("MCUX_VENV_PATH", "$env:USERPROFILE\.mcuxpressotools\.venv\Scripts", "User")
-```
-
-> **Note**: Restart VS Code (or your terminal) after setting environment variables so they take effect.
-
-### Linux (Bash - add to `~/.bashrc` or `~/.profile`)
+<details>
+<summary><b>macOS (Zsh)</b></summary>
 
 ```bash
-# Add these lines to ~/.bashrc (or ~/.profile)
-export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi"
-export SdkRootDirPath="$HOME/mcuxsdk_root"  # folder that contains mcuxsdk/
-export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
-```
-
-Then reload:
-
-```bash
-source ~/.bashrc
-```
-
-### macOS (Zsh - add to `~/.zshrc`)
-
-```bash
-# Add these lines to ~/.zshrc
-# For Apple Silicon:
+# Add to ~/.zshrc
+# Apple Silicon:
 export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-arm64-arm-none-eabi"
-# For Intel Mac:
+# Intel:
 # export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-darwin-x86_64-arm-none-eabi"
 
-export SdkRootDirPath="$HOME/mcuxsdk_root"  # folder that contains mcuxsdk/
+export SdkRootDirPath="$HOME/mcuxsdk_root"
 export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
-```
 
-Then reload:
-
-```bash
 source ~/.zshrc
 ```
+</details>
 
----
+<details>
+<summary><b>Linux (Bash)</b></summary>
 
-## Step 2: Clone the Repository
+```bash
+# Add to ~/.bashrc
+export ARMGCC_DIR="$HOME/.mcuxpressotools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi"
+export SdkRootDirPath="$HOME/mcuxsdk_root"
+export MCUX_VENV_PATH="$HOME/.mcuxpressotools/.venv/bin"
 
-Clone the project **anywhere** on your filesystem:
+source ~/.bashrc
+```
+</details>
+
+<details>
+<summary><b>Windows (PowerShell)</b></summary>
+
+```powershell
+[Environment]::SetEnvironmentVariable("ARMGCC_DIR", "$env:USERPROFILE\.mcuxpressotools\arm-gnu-toolchain-14.2.rel1-mingw-w64-x86_64-arm-none-eabi", "User")
+[Environment]::SetEnvironmentVariable("SdkRootDirPath", "$env:USERPROFILE\mcuxsdk_root", "User")
+[Environment]::SetEnvironmentVariable("MCUX_VENV_PATH", "$env:USERPROFILE\.mcuxpressotools\.venv\Scripts", "User")
+```
+Restart your terminal after setting these.
+</details>
+
+### 2. Clone and Apply SDK Patches
 
 ```bash
 git clone https://github.com/fidel-makatia/Executorch_runner_cm33.git
 cd Executorch_runner_cm33
+
+# Apply required SDK patches (run once)
+./patches/apply_patches.sh
 ```
 
-> **Note**: `mcux_include.json` reads all paths from your environment variables (`$penv{...}`).
-> There are no hardcoded paths to edit. As long as Step 1 is done correctly, `cmake --preset debug` will work out of the box.
+The patch script modifies two files in your SDK (with backups):
 
----
+| Patch | File | Why |
+|-------|------|-----|
+| **GOT initialization** | `devices/.../gcc/MIMX9352xxxxM_ram.ld` | Adds `*(.got)` and `*(.got.plt)` inside `.data` section. Without this, GOT entries are never initialized by startup code, causing vtable corruption and BUS FAULT during `load_method`. |
+| **NPU log redirect** | `middleware/.../core_driver/src/ethosu_log.h` | Redirects Ethos-U driver LOG_ERR/LOG_INFO to the remoteproc trace buffer. Without this, NPU errors are only on UART and invisible via `cat trace0`. |
 
-## Step 3: Open in VS Code
-
-```bash
-code Executorch_runner_cm33
-```
-
----
-
-## Step 4: Configure and Build
-
-### In VS Code:
-
-1. **Select CMake Configure Preset**
-   - Press `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS)
-   - Type: `CMake: Select Configure Preset`
-   - Choose: **debug** or **release**
-
-2. **Configure the Project**
-   - Press `Ctrl+Shift+P` / `Cmd+Shift+P`
-   - Type: `CMake: Configure`
-   - Wait for configuration to complete
-
-3. **Build the Project**
-   - Press `Ctrl+Shift+P` / `Cmd+Shift+P`
-   - Type: `CMake: Build`
-   - Or press `F7`
-
-### Build Output
-
-| File | Description |
-|------|-------------|
-| `debug/executorch_runner_cm33.elf` | ELF executable for debugging |
-| `debug/executorch_runner_cm33.bin` | Binary file for flashing |
-
----
-
-## Command Line Build
-
-After setting the environment variables (Step 1), you can build from any terminal.
-
-### Sanity Checks (run before your first build)
-
-Verify that your environment is set up correctly:
+### 3. Build
 
 ```bash
-# Toolchain is installed and executable
-test -x "$ARMGCC_DIR/bin/arm-none-eabi-gcc" && echo "OK: toolchain" || echo "FAIL: ARMGCC_DIR"
-
-# SDK root contains the mcuxsdk/ subdirectory
-test -d "$SdkRootDirPath/mcuxsdk" && echo "OK: SDK" || echo "FAIL: SdkRootDirPath"
-
-# Ninja is available
-command -v ninja >/dev/null && echo "OK: ninja" || echo "FAIL: ninja not found"
-```
-
-If any check prints `FAIL`, fix the corresponding environment variable or install the missing tool before proceeding.
-
-### Build
-
-```bash
-cd Executorch_runner_cm33
-
-# Configure
 cmake --preset debug
-
-# Build
 cmake --build debug
 ```
 
-> **Important**: If the configure step (`cmake --preset debug`) fails, **stop and fix the
-> reported errors first**. When configure fails no `build.ninja` is generated, so the
-> subsequent build step will produce misleading errors (e.g. "permission denied" or
-> "command was: all"). Those build errors are not the real problem -- the configure
-> output above them is.
+### 4. Load Model to DDR via U-Boot
 
----
+The firmware expects a `.pte` model at DDR address `0xC0000000`. Load it via U-Boot before booting Linux:
 
-## Deployment to i.MX93
-
-### Transfer ELF to Target
-
-```bash
-scp debug/executorch_runner_cm33.elf root@<target-ip>:/lib/firmware/
+```
+# In U-Boot console
+fatload mmc 0:1 0xc0000000 model_u65.pte
+boot
 ```
 
-### Load via RemoteProc
+The model must be compiled with the Ethos-U65 delegate.
+
+### 5. Deploy and Run
 
 ```bash
-# On i.MX93 Linux terminal
+# Copy firmware to board
+scp debug/executorch_runner_cm33.elf root@<board-ip>:/lib/firmware/
+
+# On the board (or via SSH)
+echo stop > /sys/class/remoteproc/remoteproc0/state 2>/dev/null
 echo executorch_runner_cm33.elf > /sys/class/remoteproc/remoteproc0/firmware
 echo start > /sys/class/remoteproc/remoteproc0/state
-```
-
-### Verify Loading
-
-```bash
-dmesg | grep remoteproc
+sleep 3
+cat /sys/kernel/debug/remoteproc/remoteproc0/trace0
 ```
 
 Expected output:
+```
+I: ethosu_init. base_address=0x4a900000
+NPU config match
+NPU arch match
+cmd_end_reached 0x1
+1 inferences finished
+Output[0]: dtype=6, numel=1, nbytes=4
+  [0]=1073741824 (float raw)     <- 0x40000000 = 2.0f
+Model run: 1
+Program complete, exiting.
+```
+
+---
+
+## Pre-built Libraries
+
+The `executorch/lib/` directory contains pre-built static libraries for Cortex-M33 (`-Os`, MinSizeRel):
+
+| Library | Size | Purpose |
+|---------|------|---------|
+| `libexecutorch.a` | 52KB | ExecuTorch runtime |
+| `libexecutorch_core.a` | 217KB | Core runtime (gc-sections removes most) |
+| `libexecutorch_delegate_ethos_u.a` | 19KB | Ethos-U NPU delegate backend |
+| `libquantized_ops_lib_selective.a` | 7KB | Registers only `quantize_per_tensor.out` and `dequantize_per_tensor.out` |
+| `libquantized_kernels.a` | 242KB | Kernel implementations (gc-sections removes unused) |
+| `libkernels_util_all_deps.a` | 308KB | Kernel utilities (gc-sections removes unused) |
+
+**Why selective ops?** ExecuTorch PTE models compiled for Ethos-U delegate most ops to the NPU, but quantize/dequantize at the input/output boundary still run on the CPU. The full `libquantized_ops_lib.a` registers ALL quantized ops and pulls in ~92KB of kernel code, overflowing the 128KB ITCM. The selective library registers only the 2 needed ops.
+
+---
+
+## Memory Layout
+
+| Region | Address | Size | Contents |
+|--------|---------|------|----------|
+| ITCM (m_text) | 0x0FFE0000 | 128KB | Code + rodata |
+| DTCM (m_data) | 0x20003000 | 108KB | Data, BSS, heap, stack |
+| DDR (model) | 0xC0000000 | up to ~3.3MB | `.pte` model file |
+| DDR (scratch) | 0xC0100000 | 16KB | NPU scratch buffer |
+| DDR (reserved) | 0xC0000000-0xC03FFFFF | 4MB | Total reserved via device tree |
+
+### Build Size (example)
 
 ```
-remoteproc remoteproc0: powering up imx-rproc
-remoteproc remoteproc0: Booting fw image executorch_runner_cm33.elf
-remoteproc remoteproc0: remote processor imx-rproc is now up
+Memory region         Used Size  Region Size  %age Used
+    m_interrupts:        1140 B       1144 B     99.65%
+          m_text:      103476 B     129928 B     79.64%
+          m_data:       61984 B       108 KB     56.05%
 ```
+
+---
+
+## Linux-Side Requirements
+
+The Ethos-U65 NPU must be powered and clocked by the Linux kernel driver before the CM33 firmware can use it.
+
+### Device Tree
+
+Ensure your device tree reserves 4MB of DDR for the CM33 model:
+
+```dts
+reserved-memory {
+    /* ... */
+    ethosu_mem: ethosu@c0000000 {
+        reg = <0 0xc0000000 0 0x400000>;
+        no-map;
+    };
+};
+```
+
+### Ethos-U Kernel Driver
+
+The Linux `ethosu` driver must be loaded and bound. Check with:
+
+```bash
+ls /dev/ethosu*        # Should show /dev/ethosu0
+dmesg | grep ethosu    # Should show driver probe success
+```
+
+If the driver is not loaded, the NPU will not be powered and the firmware will hang at NPU initialization.
+
+---
+
+## VS Code Build (Alternative)
+
+If you prefer VS Code with the MCUXpresso extension:
+
+1. Install [MCUXpresso for VS Code](https://marketplace.visualstudio.com/items?itemName=nxpsemiconductors.mcuxpresso)
+2. Open the project folder in VS Code
+3. `Cmd/Ctrl+Shift+P` > `CMake: Select Configure Preset` > **debug**
+4. `Cmd/Ctrl+Shift+P` > `CMake: Configure`
+5. `F7` to build
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| `ARMGCC_DIR` not found | Verify the environment variable is set: `echo $ARMGCC_DIR` (Linux/macOS) or `echo %ARMGCC_DIR%` (Windows) |
-| `SdkRootDirPath` not found | Verify the variable is set and that `$SdkRootDirPath/mcuxsdk` exists |
-| CMake configuration fails | Restart VS Code after setting environment variables |
-| Toolchain not found | Confirm the ARM GCC toolchain directory exists at the path in `ARMGCC_DIR` |
-| SDK not found | Confirm `SdkRootDirPath` points to the folder containing the `mcuxsdk` subdirectory |
-| Build says "permission denied" or "command was: all" | Configure failed -- no `build.ninja` was generated. Fix the configure errors first, then re-run the build |
-| IntelliSense uses wrong compiler | Select the correct configuration (Windows/Linux/macOS) in the C/C++ extension status bar |
-| Permission denied (Linux/macOS) | Run `chmod +x` on toolchain binaries |
-| Python/west not found | Verify `MCUX_VENV_PATH` points to your venv's `Scripts` (Windows) or `bin` (Linux/macOS) directory |
-
-### Verify Your Setup
-
-**Windows (PowerShell):**
-
-```powershell
-Test-Path $env:ARMGCC_DIR
-Test-Path "$env:SdkRootDirPath\mcuxsdk"
-```
-
-**Linux/macOS (Bash):**
-
-```bash
-ls "$ARMGCC_DIR/bin/arm-none-eabi-gcc"
-ls "$SdkRootDirPath/mcuxsdk"
-```
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| BUS FAULT during `load_method` (vtable corruption) | GOT section not initialized | Run `./patches/apply_patches.sh` |
+| `resolve_operator` error for `quantized_decomposed::*` | Missing CPU kernel for quantize/dequantize ops | Already fixed — `libquantized_ops_lib_selective.a` is linked |
+| NPU bus error (`bus_status_error 0x1`) | Scratch buffer in DTCM (not AXI-accessible by NPU) | Already fixed — scratch mapped to DDR `0xC0100000` |
+| NPU errors invisible in `trace0` | Driver logs go to UART only | Run `./patches/apply_patches.sh` |
+| Log shows literal "zu" instead of numbers | nano printf doesn't support `%zu` | Already fixed — uses `%lu` with `(unsigned long)` cast |
+| Firmware hangs at NPU init | Linux ethosu driver not loaded | Ensure `/dev/ethosu0` exists |
+| `trace0` output truncated | 3KB trace buffer filled | Trace resets before each inference run |
+| remoteproc fails to start | Stale state | Run `echo stop > .../state` first, wait 2s, then start |
 
 ---
 
-## Project Configuration Summary
+## Architecture Details
 
-| Setting | Value |
-|---------|-------|
-| **Board** | mcimx93evk |
-| **Device** | MIMX9352xxxxM |
-| **Core** | Cortex-M33 (cm33) |
-| **SDK Version** | 25.9.0 |
-| **Toolchain** | ARM GCC 14.2.rel1 |
-| **C++ Standard** | C++17 |
-| **Project Type** | sdk-v2-repository |
+### Key Design Decisions
+
+1. **NPU scratch in DDR, not DTCM** — The Ethos-U65 accesses memory via the AXI bus. CM33 DTCM (0x20003000) is tightly-coupled and not AXI-accessible. The scratch buffer is mapped to DDR `0xC0100000` (1MB after model start).
+
+2. **Selective operator registration** — Only `quantize_per_tensor.out` and `dequantize_per_tensor.out` are registered. These are the CPU ops at the NPU delegation boundary. Full registration overflows ITCM.
+
+3. **BusFault handler with naked wrapper** — Uses `__attribute__((naked))` to read the correct MSP exception frame, bypassing the compiler's prologue that corrupts the stack pointer.
+
+4. **Trace buffer for all output** — All inference results, NPU driver messages, and diagnostics go to the 3KB remoteproc trace buffer, readable from Linux via `cat /sys/kernel/debug/remoteproc/remoteproc0/trace0`.
 
 ---
 
-## Memory Usage (Example Build)
+## Project Structure
 
 ```
-Memory region         Used Size  Region Size  %age Used
-m_interrupts:            1140 B        1144 B     99.65%
-m_text:                 51776 B      129928 B     39.85%
-m_data:                 51480 B        108 KB     46.55%
+Executorch_runner_cm33/
+├── CMakeLists.txt              # Build configuration
+├── CMakePresets.json            # CMake presets (debug/release)
+├── mcux_include.json            # Environment variable bindings
+├── source/
+│   ├── arm_executor_runner.cpp  # Main firmware (inference loop + all fixes)
+│   ├── arm_memory_allocator.cpp # Memory allocator
+│   ├── rsc_table.c              # Remoteproc resource table
+│   └── *.h                      # Headers
+├── executorch/
+│   ├── include/                 # ExecuTorch headers
+│   └── lib/                     # Pre-built static libraries for Cortex-M33
+├── patches/
+│   ├── apply_patches.sh         # One-time SDK patch script
+│   └── ethosu_log.h             # Patched Ethos-U driver log header
+├── SETUP.md                     # Detailed fix documentation
+└── debug/                       # Build output (generated)
 ```
 
 ---
@@ -290,4 +279,4 @@ m_data:                 51480 B        108 KB     46.55%
 
 ---
 
-*Last updated: February 5, 2026*
+*Last updated: March 2026*
